@@ -144,6 +144,7 @@ class Flickr8kDataset(Dataset):
         # Make model input
         mosaic_img = mosaicing_CFA_Bayer(scaled_image)
         noisy_rggb, noisy_demosaiced = self.process_mosaic(mosaic_img+noise)
+        _, clean_demosaiced = self.process_mosaic(mosaic_img)
         target_image = scaled_image + conditioned_noise
         target_image = np.clip(target_image, 0, 1)
 
@@ -154,4 +155,15 @@ class Flickr8kDataset(Dataset):
         target_image_tensor  = ToTensor()(target_image).float()
         conditioning_tensor  = torch.tensor(conditioning).float()
         noisy_demosaiced_tensor = torch.tensor(noisy_demosaiced).float()
-        return rggb_tensor, image_tensor, target_image_tensor, conditioning_tensor, noisy_demosaiced_tensor
+        clean_demosaiced = torch.tensor(clean_demosaiced).float()
+        output = {
+                "rggb_tensor": rggb_tensor,
+                "image_tensor": image_tensor,
+                "target_image_tensor": target_image_tensor,
+                "conditioning_tensor": conditioning_tensor,
+                "noisy_demosaiced_tensor": noisy_demosaiced_tensor,
+                "clean_demosaiced": clean_demosaiced,
+        }
+        return output
+    
+

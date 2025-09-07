@@ -9,6 +9,7 @@ import kagglehub
 from colour_demosaicing import mosaicing_CFA_Bayer, demosaicing_CFA_Bayer_Malvar2004, demosaicing_CFA_Bayer_DDFAPD
 from Restorer.utils import numpy_pixel_unshuffle
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
+from RawRefinery.utils.image_utils import color_jitter_0_1, simulate_sparse, bilinear_demosaic
 
 def scale(x, value_range):
     min_val, max_val = value_range
@@ -96,74 +97,53 @@ class Flickr8kDataset(Dataset):
         image *= 1./255
         return image.astype(float)
 
-    def compute_noise_level(self, no_noise_amount = 0.1):
-        # Any negative number should not remove noise
-        if random.random() < no_noise_amount:
-            return 0
-        return random.random() * self.max_noise
-    
-    def compute_conditioning(self, min=-0.1, max = 1.1, h_scale=0.0, s_scale=1, v_scale=1):
-        def rand():
-            slope = max-min
-            return random.random() * slope + min
-        noise = self.compute_noise_level()
-        noise_conditioning = noise/self.max_noise
-        noise_conditioning = -1 if noise_conditioning <= 0 else noise_conditioning
-        return [noise_conditioning, rand()*h_scale, rand()*s_scale, rand()*v_scale], noise
 
-    def process_mosaic(self, _mosaic_img):
-        _mosaic_img = np.expand_dims(_mosaic_img,axis=-1)
-        _rggb_img = numpy_pixel_unshuffle(_mosaic_img)
-        _demosaic = demosaicing_CFA_Bayer_DDFAPD(_mosaic_img)
-        return _rggb_img, _demosaic
-    
-    def compute_final_range(self, min_range=-1, max_range=5):
-        rand_range = np.random.rand(2)
-        rand_range.sort()
-        new_range = reverse_scale(rand_range, (-1, 5))
-        slope = new_range[1]-new_range[0]
-        return reverse_scale(rand_range, (-1, 5)), slope
     
     def __getitem__(self, idx):
         # Numpy array [W, H, C]
         image = self.get_image(idx)
 
-        #Add noise
-        conditioning, noise_level = self.compute_conditioning()
-        W, H, C = image.shape
-        noise = np.random.normal(0, noise_level, [W, H])
-        _, noise_demosaiced = self.process_mosaic(noise)
-        conditioned_noise = transform_noise(noise_demosaiced, conditioning)
-        # Randomize range of image
-        # image_range = (-1.5, 5)
-        # rand_range = np.random.random(2)
-        # rand_range.sort()
-        # rand_range = reverse_scale(rand_range, image_range)
-        # scaled_image = reverse_scale(image, rand_range)
-        scaled_image = image
-        # Make model input
-        mosaic_img = mosaicing_CFA_Bayer(scaled_image)
-        noisy_rggb, noisy_demosaiced = self.process_mosaic(mosaic_img+noise)
-        _, clean_demosaiced = self.process_mosaic(mosaic_img)
-        target_image = scaled_image + conditioned_noise
-        target_image = np.clip(target_image, 0, 1)
-
+        # Color jitter
+        image = color_jitter_0_1(image)
         
+        # Sparse images
+        sparse_image = simulate_sparse(image.transpose(2, 0, 1))
+        
+        #Add noise
+        iso = lognuniform(size=1, low=100/65535, high=1,)[0]*65535
+        noise_levels = generate_noise_level(iso)
+        conditioning = [*noise_levels]
+        W, H, C = image.shape
+        # print(noise_levels, np.array(noise_levels).reshape(-1, 1, 1))
+        noise = np.random.normal(0, size = [C, W, H])*np.array(noise_levels).reshape(-1, 1, 1)
+        sparse_image += noise
+        print(sparse_image.shape)
+        bilinear_image = bilinear_demosaic(sparse_image)
+        sparse_image = np.clip(sparse_image, 0, 1)
+        bilinear_image = np.clip(bilinear_image, 0, 1)
+        image = np.clip(image, 0, 1)
         # Convert to tensor
-        rggb_tensor = ToTensor()(noisy_rggb).float()
-        image_tensor = ToTensor()(scaled_image).float()
-        target_image_tensor  = ToTensor()(target_image).float()
+        bilinear_image = torch.tensor(bilinear_image).float()
+        sparse_image = torch.tensor(sparse_image).float()
+        image  = torch.tensor(image).permute(2, 0, 1).float()
         conditioning_tensor  = torch.tensor(conditioning).float()
-        noisy_demosaiced_tensor = torch.tensor(noisy_demosaiced).float()
-        clean_demosaiced = torch.tensor(clean_demosaiced).float()
         output = {
-                "rggb_tensor": rggb_tensor,
-                "image_tensor": image_tensor,
-                "target_image_tensor": target_image_tensor,
+                "bilinear_image": bilinear_image,
+                "sparse_image": sparse_image,
+                "image": image,
                 "conditioning_tensor": conditioning_tensor,
-                "noisy_demosaiced_tensor": noisy_demosaiced_tensor,
-                "clean_demosaiced": clean_demosaiced,
         }
         return output
     
 
+
+def generate_noise_level(iso):
+    noise_level = (iso/12800)**.5
+    r_level = noise_level * (0.0013*np.random.randn()+0.0082)
+    g_level = noise_level * (0.0013*np.random.randn()+0.0082)
+    b_level = noise_level * (0.0013*np.random.randn()+0.0041)
+    return r_level, g_level, b_level
+
+
+def lognuniform(low=0, high=1, size=None, base=np.e):
+    return np.power(base, np.random.uniform(low, high, size))/base

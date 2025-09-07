@@ -110,7 +110,7 @@ class Flickr8kDataset(Dataset):
         sparse_image = simulate_sparse(image.transpose(2, 0, 1))
         
         #Add noise
-        iso = lognuniform(size=1, low=100/65535, high=1,)[0]*65535
+        iso = gen_iso()
         noise_levels = generate_noise_level(iso)
         conditioning = [*noise_levels]
         W, H, C = image.shape
@@ -145,5 +145,6 @@ def generate_noise_level(iso):
     return r_level, g_level, b_level
 
 
-def lognuniform(low=0, high=1, size=None, base=np.e):
-    return np.power(base, np.random.uniform(low, high, size))/base
+def gen_iso():
+    x = np.random.random()**2 * 2**17
+    return x

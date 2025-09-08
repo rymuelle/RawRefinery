@@ -440,3 +440,71 @@ def make_conditioning(conditioning, alpha):
     conditioning_extended[:, 0] = conditioning
     conditioning_extended[:, 1] = alpha
     return conditioning_extended
+
+
+
+class SmallDemosaic(nn.Module):
+  def __init__(self, *args, **kwargs):
+    super().__init__()
+    self.pu = nn.PixelUnshuffle(2)
+    self.conv = nn.Conv2d(4, 12, kernel_size=3, padding=1)
+    self.ps = nn.PixelShuffle(2)
+  def forward(self, x, cond):
+    # Make mono 
+    x = x.sum(axis=1, keepdim=True)
+    x = self.pu(x)
+    x = self.conv(x)
+    return self.ps(x)
+  
+
+
+class SmallDemosaicXTrans(nn.Module):
+  def __init__(self, *args, **kwargs):
+    super().__init__()
+    self.pu = nn.PixelUnshuffle(6)
+    self.conv = nn.Conv2d(6 ** 2, 3 * 6 ** 2, kernel_size=3, padding=1)
+    self.ps = nn.PixelShuffle(6)
+  def forward(self, x, cond):
+    x = x.sum(axis=1, keepdim=True)
+    x = self.pu(x)
+    x = self.conv(x)
+    return self.ps(x)
+  
+
+class DemosaicWrapper(nn.Module):
+  def __init__(self, model):
+    super().__init__()
+    self.model = model
+    self.demosaic = SmallDemosaic()
+  def forward(self, sparse, cond):
+    demosaiced = self.demosaic(sparse, cond)
+    x = self.model(demosaiced, cond)
+    x = demosaiced + x
+    return x, demosaiced
+  
+
+class DemosaicWrapperXTrans(nn.Module):
+  def __init__(self, model):
+    super().__init__()
+    self.model = model
+    self.demosaic = SmallDemosaicXTrans()
+  def forward(self, sparse, cond):
+    demosaiced = self.demosaic(sparse, cond)
+    x = self.model(demosaiced, cond)
+    x = demosaiced + x
+    return x, demosaiced
+
+def make_atto(width, depth, decoder_depth, middle_block, MODEL):
+    # g = torch.Generator().manual_seed(42)  # Local generator
+    torch.manual_seed(42)  # For reproducibility
+    model = MODEL(
+        width=width,
+        enc_blk_nums=depth,
+        mid_blk_nums=middle_block,
+        dec_blk_nums=decoder_depth,
+        cond_input=3,
+        in_channels=3 ,
+        out_channels=3 ,
+    )
+    model = DemosaicWrapper(model)
+    return model

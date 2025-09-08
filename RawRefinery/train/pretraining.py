@@ -116,7 +116,7 @@ class Flickr8kDataset(Dataset):
         W, H, C = image.shape
         # print(noise_levels, np.array(noise_levels).reshape(-1, 1, 1))
         noise = np.random.normal(0, size = [C, W, H])*np.array(noise_levels).reshape(-1, 1, 1)
-        sparse_image += noise
+        sparse_image += noise * (sparse_image>0)
         print(sparse_image.shape)
         bilinear_image = bilinear_demosaic(sparse_image)
         sparse_image = np.clip(sparse_image, 0, 1)

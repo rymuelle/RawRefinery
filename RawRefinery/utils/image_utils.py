@@ -135,10 +135,13 @@ def bilinear_demosaic(sparse, pattern="RGGB", cfa_type="bayer"):
 
     if cfa_type == "bayer":
         # Bilinear interpolation kernel
-        kernel = np.array([[1, 2, 1],
-                          [2, 4, 2],
-                          [1, 2, 1]], dtype=np.float32)
-        kernel /= kernel.sum()
+        kernels = [
+            np.array([[.25, .5, .25], [.5, 1, .5], [.25, .5, .25]], dtype=np.float32),
+            np.array([[0, .25, 0], [.25, 1, .25], [0, .25, 0]], dtype=np.float32),
+            np.array([[.25, .5, .25], [.5, 1, .5], [.25, .5, .25]], dtype=np.float32)
+
+        ]
+
 
     elif cfa_type == "xtrans":
         # Bilinear interpolation kernel
@@ -155,10 +158,10 @@ def bilinear_demosaic(sparse, pattern="RGGB", cfa_type="bayer"):
 
     # Interpolate each channel
     for ch in range(3):
-        rgb[ch, ...] = convolve(sparse[ch], kernel, mode="mirror")
+        rgb[ch, ...] = convolve(sparse[ch], kernels[ch], mode="mirror")
 
     # Mulitply by 2 or 4 depending on how sparse the layer is.
-    rgb[0,...] *= 4.0   # red
-    rgb[1,...] *= 2.0   # green (already dense)
-    rgb[2,...] *= 4.0   # blue
+    # rgb[0,...] *= 4.0   # red
+    # rgb[1,...] *= 2.0   # green (already dense)
+    # rgb[2,...] *= 4.0   # blue
     return rgb

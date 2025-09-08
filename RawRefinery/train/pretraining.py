@@ -65,7 +65,7 @@ class Flickr8kDataset(Dataset):
         self.crop_size = crop_size
         self.annotations = []
         self.images = os.listdir(self.image_dir)
-        self.max_noise=0.1
+        self.max_noise=2**17
 
     def get_data(self, dataset="adityajn105/flickr8k"):
         path = kagglehub.dataset_download(dataset)
@@ -108,7 +108,7 @@ class Flickr8kDataset(Dataset):
         sparse_image = simulate_sparse(image.transpose(2, 0, 1))
         
         #Add noise
-        iso = gen_iso()
+        iso = gen_iso(self.max_noise)
         noise_levels = generate_noise_level(iso)
         conditioning = [*noise_levels]
         W, H, C = image.shape
@@ -141,6 +141,6 @@ def generate_noise_level(iso):
     return r_level, g_level, b_level
 
 
-def gen_iso():
-    x = np.random.random()**2 * 2**17
+def gen_iso(max_iso):
+    x = np.random.random()**2 * max_iso
     return x

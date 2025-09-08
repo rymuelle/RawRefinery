@@ -60,12 +60,13 @@ def transform_noise(_rgb_noise, conditioning):
     return rgb_noise
 
 class Flickr8kDataset(Dataset):
-    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180):
+    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180, cfa_type='bayer'):
         self.get_data(dataset=dataset)
         self.crop_size = crop_size
         self.annotations = []
         self.images = os.listdir(self.image_dir)
         self.max_noise=2**17
+        self.cfa_type = cfa_type
 
     def get_data(self, dataset="adityajn105/flickr8k"):
         path = kagglehub.dataset_download(dataset)
@@ -103,12 +104,12 @@ class Flickr8kDataset(Dataset):
 
         #Inverse tone curve
         image = inverse_gamma_tone_curve(image)
-        
+
         # Color jitter
         image = color_jitter_0_1(image)
         
         # Sparse images
-        sparse_image = simulate_sparse(image.transpose(2, 0, 1))
+        sparse_image = simulate_sparse(image.transpose(2, 0, 1), cfa_type=self.cfa_type)
         
         #Add noise
         iso = gen_iso(high=self.max_noise)

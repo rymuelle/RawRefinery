@@ -165,3 +165,8 @@ def bilinear_demosaic(sparse, pattern="RGGB", cfa_type="bayer"):
     # rgb[1,...] *= 2.0   # green (already dense)
     # rgb[2,...] *= 4.0   # blue
     return rgb
+
+
+def inverse_gamma_tone_curve(img: np.ndarray, gamma: float = 2.2) -> np.ndarray:
+    img = np.clip(img, 0, 1)  
+    return np.power(img, gamma)

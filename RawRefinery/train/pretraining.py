@@ -7,7 +7,7 @@ import random
 import numpy as np
 import kagglehub
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
-from RawRefinery.utils.image_utils import color_jitter_0_1, simulate_sparse, bilinear_demosaic
+from RawRefinery.utils.image_utils import color_jitter_0_1, simulate_sparse, bilinear_demosaic, inverse_gamma_tone_curve
 
 def scale(x, value_range):
     min_val, max_val = value_range
@@ -101,6 +101,9 @@ class Flickr8kDataset(Dataset):
         # Numpy array [W, H, C]
         image = self.get_image(idx)
 
+        #Inverse tone curve
+        image = inverse_gamma_tone_curve(image)
+        
         # Color jitter
         image = color_jitter_0_1(image)
         
@@ -108,7 +111,9 @@ class Flickr8kDataset(Dataset):
         sparse_image = simulate_sparse(image.transpose(2, 0, 1))
         
         #Add noise
-        iso = gen_iso(self.max_noise)
+        iso = gen_iso(high=self.max_noise)
+        if np.random.random() < 0.1:
+            iso = 0
         noise_levels = generate_noise_level(iso)
         conditioning = [*noise_levels]
         W, H, C = image.shape
@@ -135,12 +140,13 @@ class Flickr8kDataset(Dataset):
 
 def generate_noise_level(iso):
     noise_level = (iso/12800)**.5
-    r_level = noise_level * (0.0013*np.random.randn()+0.0082)
-    g_level = noise_level * (0.0013*np.random.randn()+0.0082)
-    b_level = noise_level * (0.0013*np.random.randn()+0.0041)
+    r_level = noise_level * 0.02
+    g_level = r_level *  (2./3+np.random.randn()*0.1)
+    b_level = r_level *  (0.5+np.random.randn()*0.15)
     return r_level, g_level, b_level
 
 
-def gen_iso(max_iso):
-    x = np.random.random()**2 * max_iso
-    return x
+def gen_iso(low=25, high=65535, size=None, base=np.e):
+    log_low = np.log(low) / np.log(base)
+    log_high = np.log(high) / np.log(base)
+    return base ** np.random.uniform(log_low, log_high, size=size)

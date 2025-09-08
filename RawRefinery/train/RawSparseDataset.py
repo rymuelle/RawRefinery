@@ -9,7 +9,7 @@ from pathlib import Path
 from RawHandler.RawHandler import RawHandler
 from RawHandler.utils import linear_to_srgb, pixel_unshuffle, pixel_shuffle
 from RawRefinery.utils.training_utils import normalized_cross_correlation
-from RawRefinery.utils.image_utils import simulate_sparse
+from RawRefinery.utils.image_utils import simulate_sparse, bilinear_demosaic
 
 class RawSparseDataset(Dataset):
     def __init__(self, csv_path, patch_size=256, cc_threshold=0.92, colorspace='sRGB'):
@@ -109,9 +109,10 @@ class RawSparseDataset(Dataset):
             noisy_sparse =  noisy.as_sparse(dims=expand_crop_dim).astype(np.float32)
             noisy_sparse = noisy_sparse[:, align_offset:-align_offset, align_offset:-align_offset]
             gt_sparse = simulate_sparse(gt_patch)
- 
+            bilinear = bilinear_demosaic(noisy_sparse)
             noisy_sparse = torch.from_numpy(noisy_sparse).float()
             noisy_tensor = torch.from_numpy(noisy_patch).float()
+            bilinear_tensor =  torch.from_numpy(bilinear).float()
             gt_tensor = torch.from_numpy(gt_patch).float()
             gt_sparse_tensor = torch.from_numpy(gt_sparse).float()
             gt_sparse_tensor = torch.from_numpy(gt_sparse).float()
@@ -119,11 +120,11 @@ class RawSparseDataset(Dataset):
             return {
                 'noisy_sparse': noisy_sparse,
                 'noisy_tensor': noisy_tensor,
-
+                'bilinear_tensor': bilinear_tensor,
                 'gt': gt_tensor,
                 'gt_sparse': gt_sparse_tensor,
                 # "noisy_rggb_tensor": noisy_rggb_tensor,
-                "conditioning": conditioning, 
+                # "conditioning": conditioning, 
                 'idx': idx,
                 'cc': row['cc'],
                 'ncc': ncc,

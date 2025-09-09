@@ -108,7 +108,7 @@ class Flickr8kDataset(Dataset):
         # # image *= 1/image.max()
         # image*=0
         #Inverse tone curve
-        image = inverse_gamma_tone_curve(image, gamma=3)
+        image = inverse_gamma_tone_curve(image, gamma=4)
 
         # Color jitter
         image = color_jitter_0_1(image)

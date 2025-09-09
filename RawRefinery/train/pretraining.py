@@ -60,12 +60,13 @@ def transform_noise(_rgb_noise, conditioning):
     return rgb_noise
 
 class Flickr8kDataset(Dataset):
-    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180, cfa_type='bayer'):
+    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180, cfa_type='bayer', max_iso=2**17, min_iso=100):
         self.get_data(dataset=dataset)
         self.crop_size = crop_size
         self.annotations = []
         self.images = os.listdir(self.image_dir)
-        self.max_noise=2**17
+        self.max_iso=max_iso
+        self.min_iso=min_iso
         self.cfa_type = cfa_type
 
     def get_data(self, dataset="adityajn105/flickr8k"):
@@ -112,9 +113,9 @@ class Flickr8kDataset(Dataset):
         sparse_image = simulate_sparse(image.transpose(2, 0, 1), cfa_type=self.cfa_type)
         
         #Add noise
-        iso = gen_iso(high=self.max_noise)
-        if np.random.random() < 0.1:
-            iso = 0
+        iso = gen_iso(low=self.min_iso, high=self.min_iso)
+        # if np.random.random() < 0.1:
+        #     iso = 0
         noise_levels = generate_noise_level(iso)
         conditioning = [*noise_levels]
         W, H, C = image.shape

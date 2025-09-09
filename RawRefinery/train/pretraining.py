@@ -110,8 +110,7 @@ class Flickr8kDataset(Dataset):
         image = color_jitter_0_1(image)
         
         # Sparse images
-        sparse_image = simulate_sparse(image.transpose(2, 0, 1), cfa_type=self.cfa_type)
-        
+        sparse_image, sparse_mask = simulate_sparse(image.transpose(2, 0, 1), cfa_type=self.cfa_type)
         #Add noise
         iso = gen_iso(low=self.min_iso, high=self.max_iso)
         # if np.random.random() < 0.1:
@@ -120,7 +119,7 @@ class Flickr8kDataset(Dataset):
         conditioning = [*noise_levels]
         W, H, C = image.shape
         noise = np.random.normal(0, size = [C, W, H])*np.array(noise_levels).reshape(-1, 1, 1)
-        sparse_image += noise * (sparse_image>0)
+        sparse_image += noise * sparse_mask
         bilinear_image = bilinear_demosaic(sparse_image)
         sparse_image = np.clip(sparse_image, 0, 1)
         bilinear_image = np.clip(bilinear_image, 0, 1)
@@ -130,13 +129,14 @@ class Flickr8kDataset(Dataset):
         sparse_image = torch.tensor(sparse_image).float()
         image  = torch.tensor(image).permute(2, 0, 1).float()
         conditioning_tensor  = torch.tensor(conditioning).float()
-        
+
         output = {
                 "bilinear_image": bilinear_image,
                 "sparse_image": sparse_image,
                 "image": image,
                 "conditioning_tensor": conditioning_tensor,
                 "iso": iso,
+                "sparse_mask": sparse_mask,
         }
         return output
     

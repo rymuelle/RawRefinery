@@ -14,10 +14,11 @@ def simulate_sparse(image, pattern="RGGB", cfa_type="bayer"):
 
     Returns:
         cfa: numpy array (r, H, W), sparse CFA image.
+        sparse_mask:  numpy array (r, H, W), mask of pixels.
     """
     _, H, W= image.shape
     cfa = np.zeros((3, H, W), dtype=image.dtype)
-
+    sparse_mask = np.zeros((3, H, W), dtype=image.dtype)
     if cfa_type == "bayer":
         # 2×2 Bayer masks
         masks = {
@@ -31,12 +32,12 @@ def simulate_sparse(image, pattern="RGGB", cfa_type="bayer"):
 
         mask = masks[pattern]
         cmap = {"R": 0, "G": 1, "B": 2}
-
+         
         for i in range(2):
             for j in range(2):
                 ch = cmap[mask[i, j]]
                 cfa[ch, i::2, j::2] = image[ch, i::2, j::2]
-
+                sparse_mask[ch, i::2, j::2] = 1
     elif cfa_type == "xtrans":
         # Fuji X-Trans 6×6 repeating pattern
         xtrans_pattern = np.array([
@@ -53,11 +54,11 @@ def simulate_sparse(image, pattern="RGGB", cfa_type="bayer"):
             for j in range(6):
                 ch = cmap[xtrans_pattern[i, j]]
                 cfa[ch, i::6, j::6] = image[ch, i::6, j::6]
-
+                sparse_mask[ch, i::2, j::2] = 1
     else:
         raise ValueError(f"Unknown CFA type: {cfa_type}")
 
-    return cfa
+    return cfa, sparse_mask
 
 
 def color_jitter_0_1(img, brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1):
@@ -170,3 +171,55 @@ def bilinear_demosaic(sparse, pattern="RGGB", cfa_type="bayer"):
 def inverse_gamma_tone_curve(img: np.ndarray, gamma: float = 2.2) -> np.ndarray:
     img = np.clip(img, 0, 1)  
     return np.power(img, gamma)
+
+
+def bilinear_demosaic_torch(sparse, pattern="RGGB", cfa_type="bayer"):
+    """
+    Simple bilinear demosaicing for Bayer and X-Trans CFAs (Torch version).
+
+    Args:
+        sparse: torch tensor (3, H, W) with a sparse representation of the CFA image.
+        pattern: CFA pattern string, one of {"RGGB","BGGR","GRBG","GBRG"} for Bayer.
+        cfa_type: "bayer" or "xtrans".
+
+    Returns:
+        rgb: torch tensor (3, H, W), bilinearly demosaiced image.
+    """
+    C, H, W = sparse.shape
+    device = sparse.device
+    dtype = sparse.dtype
+    
+    if cfa_type == "bayer":
+        kernels = [
+            torch.tensor([[.25, .5, .25],
+                          [.5, 1, .5],
+                          [.25, .5, .25]], dtype=dtype, device=device),
+            torch.tensor([[0, .25, 0],
+                          [.25, 1, .25],
+                          [0, .25, 0]], dtype=dtype, device=device),
+            torch.tensor([[.25, .5, .25],
+                          [.5, 1, .5],
+                          [.25, .5, .25]], dtype=dtype, device=device)
+        ]
+    elif cfa_type == "xtrans":
+        kernel = torch.tensor([
+            [1, 2, 4, 2, 1],
+            [2, 4, 8, 4, 2],
+            [4, 8, 16, 8, 4],
+            [2, 4, 8, 4, 2],
+            [1, 2, 4, 2, 1]], dtype=dtype, device=device)
+        kernel /= kernel.sum()
+        kernels = [kernel, kernel, kernel]
+    else:
+        raise ValueError(f"Unknown CFA type: {cfa_type}")
+
+    rgb = torch.zeros_like(sparse)
+
+    # Apply each kernel using conv2d
+    for ch in range(3):
+        k = kernels[ch].unsqueeze(0).unsqueeze(0)  # (1,1,H,W)
+        x = sparse[ch:ch+1].unsqueeze(0)           # (1,1,H,W)
+        pad_h, pad_w = k.shape[-2]//2, k.shape[-1]//2
+        rgb[ch] = F.conv2d(F.pad(x, (pad_w, pad_w, pad_h, pad_h), mode="reflect"), k)[0,0]
+
+    return rgb

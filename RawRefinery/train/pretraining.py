@@ -60,7 +60,7 @@ def transform_noise(_rgb_noise, conditioning):
     return rgb_noise
 
 class Flickr8kDataset(Dataset):
-    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180, cfa_type='bayer', max_iso=2**17, min_iso=100):
+    def __init__(self,  dataset="adityajn105/flickr8k", crop_size=180, cfa_type='bayer', max_iso=156800, min_iso=100):
         self.get_data(dataset=dataset)
         self.crop_size = crop_size
         self.annotations = []
@@ -103,8 +103,12 @@ class Flickr8kDataset(Dataset):
         # Numpy array [W, H, C]
         image = self.get_image(idx)
 
+        #Scale from 0 to 1
+        image -= image.min()
+        # # image *= 1/image.max()
+        # image*=0
         #Inverse tone curve
-        image = inverse_gamma_tone_curve(image)
+        image = inverse_gamma_tone_curve(image, gamma=3)
 
         # Color jitter
         image = color_jitter_0_1(image)
@@ -143,14 +147,20 @@ class Flickr8kDataset(Dataset):
 
 
 def generate_noise_level(iso):
-    noise_level = (iso/12800)**.5
-    r_level = noise_level * 0.02
-    g_level = r_level *  (2./3+np.random.randn()*0.1)
-    b_level = r_level *  (0.5+np.random.randn()*0.15)
+    base_noise_level = (iso/12800)**.5*0.02
+    r_level = base_noise_level * 0.11 / 0.07
+    g_level = base_noise_level * 0.05 / 0.07
+    b_level = base_noise_level * 0.03 / 0.07
     return r_level, g_level, b_level
 
 
-def gen_iso(low=25, high=65535, size=None, base=np.e):
-    log_low = np.log(low) / np.log(base)
-    log_high = np.log(high) / np.log(base)
-    return base ** np.random.uniform(log_low, log_high, size=size)
+
+# def gen_iso(low=25, high=65535, size=None, base=np.e):
+#     log_low = np.log(low) / np.log(base)
+#     log_high = np.log(high) / np.log(base)
+#     return base ** np.random.uniform(log_low, log_high, size=size)
+
+def gen_iso(low=100, high=156800):
+    uniform_log_samples = np.random.uniform(low=np.log(low), high=np.log(high), size=1)
+    random_logspace_numbers = np.exp(uniform_log_samples)[0]
+    return random_logspace_numbers

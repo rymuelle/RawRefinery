@@ -42,9 +42,19 @@ class SmallRawDataset(Dataset):
 
         with imageio.imopen(f"{self.path}/{row.gt_image}.jpg", "r") as image_resource:
             gt_image = image_resource.read()
+        gt_image  = gt_image/255
+        bayer_data = bayer_data/255
+        # bayer_data = Image.open(f"{self.path}/{row.noisy_image}_bayer.jpg")
+        # bayer_data = np.array(bayer_data)/255.
+
+        # gt_image = Image.open(f"{self.path}/{row.gt_image}.jpg")
+        # gt_image = np.array(gt_image)/255.
+
+        # Align GT
+        h, w, _ = gt_image.shape
+        gt_image = cv2.warpAffine(gt_image, warp_matrix, (w, h), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
 
         #Crop images
-        h, w, _ = gt_image.shape
         top = np.random.randint(0 + self.buffer, h - self.crop_size - self.buffer)
         if top % 2 != 0: top = top - 1
         left = np.random.randint(0 + self.buffer, w - self.crop_size - self.buffer)
@@ -55,28 +65,22 @@ class SmallRawDataset(Dataset):
         bayer_data = bayer_data[top:bottom, left:right]
         h, w, _ = gt_image.shape
 
-        gt_image = gt_image/255
-        bayer_data = bayer_data/255
-
         # Translate to linear
         gt_image = inverse_gamma_tone_curve(gt_image)
         bayer_data = inverse_gamma_tone_curve(bayer_data)
 
         demosaiced_noisy = demosaicing_CFA_Bayer_Malvar2004(bayer_data)
+
         sparse, _ = cfa_to_sparse(bayer_data)
         rggb = bayer_data.reshape(h // 2, 2, w // 2, 2, 1).transpose(3, 1, 4, 0, 2).reshape(4, h // 2, w // 2)
-        
-        # Align GT
-        gt = cv2.warpAffine(gt_image, warp_matrix, (w, h), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
 
         # Convert to tensors
         output = {
             "bayer": torch.tensor(bayer_data).to(float), 
-            "gt": torch.tensor(gt).to(float).permute(2, 0, 1), 
+            "gt": torch.tensor(gt_image).to(float).permute(2, 0, 1), 
             "sparse": torch.tensor(sparse).to(float),
             "noisy": torch.tensor(demosaiced_noisy).to(float).permute(2, 0, 1), 
             "rggb": torch.tensor(rggb).to(float),
             "conditioning": torch.tensor([row.iso/self.coordinate_iso]).to(float), 
         }
-
         return output

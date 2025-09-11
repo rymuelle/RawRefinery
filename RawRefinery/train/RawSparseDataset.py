@@ -108,16 +108,15 @@ class RawSparseDataset(Dataset):
             # Make sparse and bilinear output
             noisy_sparse =  noisy.as_sparse(dims=expand_crop_dim).astype(np.float32)
             noisy_sparse = noisy_sparse[:, align_offset:-align_offset, align_offset:-align_offset]
-            gt_sparse = simulate_sparse(gt_patch)
+            gt_sparse, g_sparse_mask = simulate_sparse(gt_patch)
             bilinear = bilinear_demosaic(noisy_sparse)
             noisy_sparse = torch.from_numpy(noisy_sparse).float()
             noisy_tensor = torch.from_numpy(noisy_patch).float()
             bilinear_tensor =  torch.from_numpy(bilinear).float()
             gt_tensor = torch.from_numpy(gt_patch).float()
             gt_sparse_tensor = torch.from_numpy(gt_sparse).float()
-            gt_sparse_tensor = torch.from_numpy(gt_sparse).float()
 
-            return {
+            return_dict = {
                 'noisy_sparse': noisy_sparse,
                 'noisy_tensor': noisy_tensor,
                 'bilinear_tensor': bilinear_tensor,
@@ -134,5 +133,15 @@ class RawSparseDataset(Dataset):
                 # 'y_warp': row['y_warp'],
                 # 'gt_mean': row['gt_mean'],
                 # 'noisy_mean': row['noisy_mean'],
-                'gains': gains
+                'gains': gains,
+                # 'noisy_rggb_tensor': noisy_rggb_tensor
             }
+
+            using_NAF = True
+            if using_NAF:
+                noisy_rggb = noisy.as_rggb( dims=crop_dim)
+                noisy_rggb_tensor = torch.from_numpy(noisy_rggb).float()
+                conditioning = torch.tensor([float(row['iso'])/6400, 0, 0, 0]).float()
+                return_dict['conditioning'] = conditioning
+                return_dict['noisy_rggb_tensor'] = noisy_rggb_tensor
+            return  return_dict

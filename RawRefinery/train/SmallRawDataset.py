@@ -76,11 +76,11 @@ class SmallRawDataset(Dataset):
 
         # Convert to tensors
         output = {
-            "bayer": torch.tensor(bayer_data).to(float), 
-            "gt": torch.tensor(gt_image).to(float).permute(2, 0, 1), 
-            "sparse": torch.tensor(sparse).to(float),
-            "noisy": torch.tensor(demosaiced_noisy).to(float).permute(2, 0, 1), 
-            "rggb": torch.tensor(rggb).to(float),
+            "bayer": torch.tensor(bayer_data).to(float).clip(0,1), 
+            "gt": torch.tensor(gt_image).to(float).permute(2, 0, 1).clip(0,1), 
+            "sparse": torch.tensor(sparse).to(float).clip(0,1),
+            "noisy": torch.tensor(demosaiced_noisy).to(float).permute(2, 0, 1).clip(0,1), 
+            "rggb": torch.tensor(rggb).to(float).clip(0,1),
             "conditioning": torch.tensor([row.iso/self.coordinate_iso]).to(float), 
         }
         return output

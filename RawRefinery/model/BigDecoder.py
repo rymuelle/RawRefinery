@@ -1,20 +1,35 @@
-from RawRefinery.model.Cond_NAFNet import ConditionedChannelAttention
+from RawRefinery.model.Cond_NAFNet import ConditionedChannelAttention, SimpleGate
 import torch
 import torch.nn as nn
 import numpy as np
 
+class LKA(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        squeeze_chans = channels//4
+        self.in_conv = nn.Conv2d(channels, squeeze_chans, 1, 1, 0)
+        self.large_conv = nn.Conv2d(squeeze_chans, squeeze_chans, 7, 1, 3, groups=squeeze_chans)
+        self.out_conv = nn.Conv2d(squeeze_chans, channels, 1, 1, 0)
 
-class BottleNeck(nn.Module):
+    def forward(self, x):
+        x = self.in_conv(x)
+        x = self.large_conv(x)
+        x = self.out_conv(x)
+        return x 
+class GatedBottleNeck(nn.Module):
     def __init__(self, chan, ratio=2, cond_chans=0, r=16):
         super().__init__()
         interior_chan = int(chan * ratio)
         self.pwconv = nn.Conv2d(chan, interior_chan, 1, 1, 0)
         self.dwconv = nn.Conv2d(interior_chan, interior_chan, 3, 1, 1, groups=interior_chan)
+        self.lka =  LKA(interior_chan)
+        
+        self.act = SimpleGate()
+        self.sca = ConditionedChannelAttention(interior_chan // 2, cond_chans)
+        self.pwconv2 = nn.Conv2d(interior_chan // 2 , chan, 1, 1, 0)
+        
 
-        self.sca = ConditionedChannelAttention(interior_chan, cond_chans)
-        self.act = nn.ReLU()
-        self.pwconv2 = nn.Conv2d(interior_chan , chan, 1, 1, 0)
-
+        
         self.beta = nn.Parameter(torch.zeros(1), requires_grad=True)
         self.norm = nn.GroupNorm(1, chan)
     def forward(self, input):
@@ -23,6 +38,7 @@ class BottleNeck(nn.Module):
         x = self.norm(in_x)
         
         x = self.pwconv(x)
+        x = self.lka(x)*x
         x = self.dwconv(x)
         x = self.act(x)
         x = self.sca(x, in_cond) * x
@@ -50,7 +66,7 @@ class ScaleAndProcess(nn.Module):
         elif len(input)==3:
             in_image, cond, previous_output = input
         after_conv = self.in_conv(in_image)
-        if len(input) == 4:
+        if len(input) == 3:
             after_conv = after_conv + previous_output
             
         output = self.blocks((after_conv, cond))[0]
@@ -60,7 +76,7 @@ class ScaleAndProcess(nn.Module):
         
         return output, out_image, reduced_image
 
-
+from time import perf_counter
 class BigDecoder(nn.Module):
     def __init__(self, in_chan, out_chan, widths=[64, 64, 64, 64], blocks=[8,8,8,8], cond_chans=1):
         super().__init__()
@@ -89,7 +105,6 @@ class BigDecoder(nn.Module):
             if len(self.stages) > current_stage+1:
                 x = self.ups[current_stage](x)
             input = (img, cond, x)
-
         return out_images
 
         
@@ -105,5 +120,4 @@ class MultiScaleLoss(nn.Module):
         for output in outputs:
             scaled = nn.functional.interpolate(gt, size=output.shape[-2:])
             loss += self.loss_func(output, scaled)
-            print(self.loss_func(output, scaled), output.shape, scaled.shape)
         return loss

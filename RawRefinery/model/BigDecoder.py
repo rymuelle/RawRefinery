@@ -234,8 +234,15 @@ class BigStep2(nn.Module):
         for scale_power, n_block  in enumerate(n_blocks):
             scale = 2 ** scale_power
             padding = max(scale // 2 - 1, 0)
-            self.downs.append(nn.Conv2d(in_chan, chan, scale, scale, padding))
-            block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
+            if scale > 1:
+                self.downs.append(nn.Conv2d(in_chan, chan, scale, scale, padding))
+            else:
+                self.downs.append(nn.Conv2d(in_chan, chan, 3, 1, 1))
+            if scale_power == len(n_blocks)-1:
+                #block_list = [TransformerBottleneck(chan, n_heads=16, d_ff=4096, n_layers=1)]
+                block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
+            else:
+                block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
             self.blocks.append(nn.Sequential(
                 *block_list
             ))

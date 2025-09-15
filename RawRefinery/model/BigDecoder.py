@@ -193,11 +193,13 @@ class HBlockModel(nn.Module):
             self.out_convs = nn.Conv2d(width, chan, 3, 1, 1)
  
     def forward(self, x, cond):
-        inp = x
         x = self.in_conv(x)
+        inp = x
         outputs = []
         for block in self.blocks:
             x = block( (x, cond) )[0]
+            # Addind detail back in with residual connection
+            # x = x + inp
             outputs.append(self.out_convs(x))
         return outputs
     
@@ -213,3 +215,59 @@ class SlapTwoBigDecoders(nn.Module):
         out1 = self.decoder1( x, cond)
         out2 = self.decoder2( out1[-1], cond)
         return out1 + out2
+    
+
+
+class BigStep2(nn.Module):
+    def __init__(self, in_chan, base_chan, 
+                 block_type = NAFBlock0,  
+                 n_blocks = [1, 1, 1, 1, 1],
+                 cond_chans=1):
+        super().__init__()
+        # self.intro_conv = nn.Conv2d(in_chan, base_chan, 3, 1, 1)
+
+        self.ups = nn.ModuleList()
+        self.blocks = nn.ModuleList()
+        self.downs = nn.ModuleList()
+        self.merges = nn.ModuleList()
+        chan = base_chan
+        for scale_power, n_block  in enumerate(n_blocks):
+            scale = 2 ** scale_power
+            padding = max(scale // 2 - 1, 0)
+            self.downs.append(nn.Conv2d(in_chan, chan, scale, scale, padding))
+            block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
+            self.blocks.append(nn.Sequential(
+                *block_list
+            ))
+
+            if scale > 1:
+                up = nn.Sequential(
+                    nn.Conv2d(chan, chan * 2, 1, bias=False), nn.PixelShuffle(2)
+                )
+            else:
+                up = nn.Identity()
+
+            self.ups.append(up)
+
+            fuser = Fuser(chan)
+            self.merges.append(fuser)
+
+            chan = chan * 2
+
+        self.out_conv = nn.Conv2d(base_chan, in_chan, 3, 1, 1)
+        self.downs = self.downs[::-1]
+        self.blocks = self.blocks[::-1]
+        self.ups = self.ups[::-1]
+        self.merges = self.merges[::-1]
+    def forward(self, image, cond):
+        stage = 0
+        for down, block, up, merge in zip(self.downs, self.blocks, self.ups, self.merges):
+            x = down(image)
+            if stage:
+                x = merge(x, up_x)
+            x = block((x, cond))[0]
+            up_x = up(x)
+            stage += 1
+        start = perf_counter()
+        out = self.out_conv(up_x)
+        return [image + out]

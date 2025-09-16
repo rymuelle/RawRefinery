@@ -218,6 +218,40 @@ class SlapTwoBigDecoders(nn.Module):
     
 
 
+
+class CondSEBlock(nn.Module):
+    def __init__(self, chan, reduction=16, cond_chan=1):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(chan + cond_chan, chan // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(chan // reduction, chan, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, conditioning):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = torch.cat([y, conditioning], dim=1)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+    
+class CondFuser(nn.Module):
+    def __init__(self, chan, cond_chan=1):
+        super().__init__()
+        self.seb = CondSEBlock(chan * 2, cond_chan=cond_chan)
+        self.pwconv = nn.Conv2d(chan * 2, chan * 2, 1, 1, 0)
+        self.sg = SimpleGate()
+
+    def forward(self, x1, x2, cond):
+        x = torch.cat([x1, x2], dim=1)
+        x = self.seb(x, cond)
+        x = self.pwconv(x)
+        x = self.sg(x)
+        return x
+    
+
 class BigStep2(nn.Module):
     def __init__(self, in_chan, base_chan, 
                  block_type = NAFBlock0,  
@@ -239,7 +273,7 @@ class BigStep2(nn.Module):
             else:
                 self.downs.append(nn.Conv2d(in_chan, chan, 3, 1, 1))
             if scale_power == len(n_blocks)-1:
-                #block_list = [TransformerBottleneck(chan, n_heads=16, d_ff=4096, n_layers=1)]
+                # block_list = [TransformerBottleneck(chan, n_heads=16, d_ff=chan * 2, n_layers=8)]
                 block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
             else:
                 block_list = [NAFBlock0(chan, cond_chans=cond_chans) for _ in range(n_block)]
@@ -256,7 +290,7 @@ class BigStep2(nn.Module):
 
             self.ups.append(up)
 
-            fuser = Fuser(chan)
+            fuser = CondFuser(chan, cond_chan=cond_chans)
             self.merges.append(fuser)
 
             chan = chan * 2
@@ -267,11 +301,12 @@ class BigStep2(nn.Module):
         self.ups = self.ups[::-1]
         self.merges = self.merges[::-1]
     def forward(self, image, cond):
+        # intro = self.intro_conv(image)
         stage = 0
         for down, block, up, merge in zip(self.downs, self.blocks, self.ups, self.merges):
             x = down(image)
             if stage:
-                x = merge(x, up_x)
+                x = merge(x, up_x, cond)
             x = block((x, cond))[0]
             up_x = up(x)
             stage += 1

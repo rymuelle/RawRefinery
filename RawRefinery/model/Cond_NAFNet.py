@@ -301,12 +301,23 @@ class Restorer(nn.Module):
     
 
 
+class AddPixelShuffle(nn.Module):
+    def __init__(self, model, in_channels=4, out_channels=3):
+        super().__init__()
+        self.model = model
+        self.ps = nn.PixelShuffle(2)
+
+    def forward(self, x, iso):
+        x = self.model(x, iso)
+        x = self.ps(x)
+        return x
+
+
 
 
 # Get the model
 def load_model(weight_file_path):
 
-    from Restorer.Restorer import AddPixelShuffle
     model = Restorer(
         width=64,
         enc_blk_nums = [2, 2, 4, 8],

@@ -22,7 +22,7 @@ class RawRefineryApp(QMainWindow):
     """
     A PySide6 application for browsing and 'denoising' raw image files.
     """
-    def __init__(self):
+    def __init__(self, model_path='weights/shadow_aware_random_vgg.pt'):
         super().__init__()
         self.setWindowTitle("Raw Refinery")
         self.setGeometry(200, 200, 200, 200)
@@ -112,9 +112,14 @@ class RawRefineryApp(QMainWindow):
         self.original_pixmap = None
 
         # -- Denoising Model --
-        self.device  = 'mps' if torch.mps.is_available() else 'cpu'
-        model = load_model('/Users/ryanmueller/Develop/RawRefinery/weights/train_on_raw_NAFNet_shadow_aware_random_vgg.pt').eval()
-        self.mh = ModelHandler(model, self.device)
+        if torch.mps.is_available():
+            self.device  = 'mps' 
+        elif torch.cuda.is_available():
+            self.device  = 'cuda' 
+        else:
+            self.device = 'cpu'
+        model = load_model(model_path).eval()
+        self.mh = ModelHandler(model, self.device, colorspace='lin_rec2020')
 
     def open_folder_dialog(self):
         """

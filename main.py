@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 import os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -18,11 +19,20 @@ from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gam
 from RawRefinery.application.ModelHandler import ModelHandler
 from RawRefinery.application.dng_utils import to_dng
 
+def generate_path():
+    if getattr(sys, 'frozen', False):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent
+
+    weights_path = base_path / 'weights' / 'shadow_aware_random_vgg.pt'
+    return weights_path
+
 class RawRefineryApp(QMainWindow):
     """
     A PySide6 application for browsing and 'denoising' raw image files.
     """
-    def __init__(self, model_path='weights/shadow_aware_random_vgg.pt'):
+    def __init__(self, model_path=generate_path()):
         super().__init__()
         self.setWindowTitle("Raw Refinery")
         self.setGeometry(200, 200, 200, 200)

@@ -355,6 +355,6 @@ class ModelWrapper(nn.Module):
 def make_sparse(model_name = '/Volumes/EasyStore/models/Cond_NAF_variable_layers_cca_merge_unet_sparse.pt'):
     model = ModelWrapper()
     if not model_name is None:
-        state_dict = torch.load(model_name)
+        state_dict = torch.load(model_name, map_location="cpu")
         model.load_state_dict(state_dict)
     return model

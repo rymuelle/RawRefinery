@@ -6,10 +6,31 @@ import numpy as np
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 
+from pathlib import Path
+from platformdirs import user_data_dir
+import requests
+from tqdm import tqdm
 
 class ModelHandler():
-    def __init__(self, model, device, n_batches=2, colorspace = 'lin_rec2020'):
-        self.model = model.to(device)
+    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020'):
+
+        app_name = "RawRefinery"
+        model_url = "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt" 
+
+        data_dir: Path = Path(user_data_dir(app_name))
+        model_path: Path = data_dir / model_name
+
+
+        # 3. Check if the directory and the file exist
+        if model_path.is_file():
+            print(f"Model weights found at: {model_path}")
+        else:
+            print(f"Model weights not found. Expected path: {model_path}")
+            download_file(model_url, model_path)
+
+        model = torch.jit.load(model_path)
+        self.model = model.eval().to(device)
+
         self.rh = None
         self.iso = 100
         self.device = device
@@ -31,8 +52,8 @@ class ModelHandler():
             self.iso = 100
     
     def tile(self, conditioning, dims=None, apply_gamma=False):
-        # img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
-        img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
+        img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
+        # img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
         denoised_img = denoised_img * (1 - conditioning[1]/100) + img * conditioning[1]/100
         if apply_gamma:
             img = img ** (1/2.2)
@@ -63,7 +84,7 @@ class ModelHandler():
 def tile_image_rggb(rh, device, conditioning, model,
                img_size = 128,
                tile_overlap=0.25,
-               n_batches=2,
+               batch_size=1,
                dims=None,
                ):
 
@@ -91,9 +112,9 @@ def tile_image_rggb(rh, device, conditioning, model,
     )
 
     tiles = tiling_module.split_into_tiles(tensor_image).float().to(device)
-    batches = torch.split(tiles, n_batches)
+    batches = torch.split(tiles, batch_size)
     
-    conditioning_tensor = [conditioning for _ in range(n_batches)]
+    conditioning_tensor = [conditioning for _ in range(batch_size)]
     conditioning_tensor = torch.tensor(conditioning_tensor)
     conditioning_tensor[:, 0] =conditioning_tensor[:, 0]/6400
     conditioning_tensor = conditioning_tensor.float().to(device)  
@@ -155,3 +176,44 @@ def tile_image_sparse(rh, device, conditioning, model,
     stitched = tiling_module.rebuild_with_masks(tiles).detach().cpu().numpy()[0]
     # stitched += image_RGB
     return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
+
+
+
+def download_file(url: str, dest_path: Path):
+    """Downloads a file from a URL to a destination path with a progress bar."""
+    
+    # 1. Ensure the destination directory exists
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"Attempting to download model from: {url}")
+    print(f"Saving to: {dest_path}")
+    
+    try:
+        # Use stream=True to download large files in chunks
+        response = requests.get(url, stream=True, allow_redirects=True)
+        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+
+        # Get the total file size from the header
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 1024 # 1 KB
+
+        with open(dest_path, 'wb') as f, tqdm(
+            desc=dest_path.name,
+            total=total_size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for data in response.iter_content(block_size):
+                bar.update(len(data))
+                f.write(data)
+
+        print("✅ Download complete.")
+        return True
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error during download: {e}")
+        # Clean up the partial file if it exists
+        if dest_path.is_file():
+             dest_path.unlink()
+        return False

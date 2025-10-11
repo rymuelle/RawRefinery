@@ -31,8 +31,8 @@ class ModelHandler():
             self.iso = 100
     
     def tile(self, conditioning, dims=None, apply_gamma=False):
-        img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
-        
+        # img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
+        img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
         denoised_img = denoised_img * (1 - conditioning[1]/100) + img * conditioning[1]/100
         if apply_gamma:
             img = img ** (1/2.2)

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 datas = [
-    ('weights/shadow_aware_random_vgg.pt', 'weights'),
 ]
 
 a = Analysis(

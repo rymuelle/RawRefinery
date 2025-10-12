@@ -82,7 +82,6 @@ class ModelHandler():
 
 def tile_image_rggb(rh, device, conditioning, model,
                     img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
-
     image_RGGB = rh.as_rggb(dims=dims)
     image_RGB = rh.as_rgb(dims=dims)
     tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
@@ -105,7 +104,7 @@ def tile_image_rggb(rh, device, conditioning, model,
         .unsqueeze(0)
     )
     conditioning_tensor[:, 0] /= 6400
-
+    conditioning_tensor[:, 1] = 0
     processed_batches = []
 
 
@@ -136,58 +135,13 @@ def tile_image_rggb(rh, device, conditioning, model,
     )
 
     stitched += image_RGB
+    # Blend based on grain mixer'
+    alpha = conditioning[1] / 100
+    stitched = (stitched * (1-alpha)) + image_RGB * alpha
     del tiles, batches, processed_batches, conditioning_tensor
     torch.cuda.empty_cache()
 
     return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
-
-
-def tile_image_sparse(rh, device, conditioning, model,
-               img_size = 256,
-               tile_overlap=0.25,
-               n_batches=2,
-               dims=None,
-               ):
-
-    image_sparse = rh.as_sparse(dims=dims)
-    image_RGB = rh.as_rgb(dims=dims, demosaicing_func=demosaicing_CFA_Bayer_Malvar2004)
-    tensor_sparse = torch.tensor(image_sparse).unsqueeze(0)
-    tensor_RGB = torch.tensor(image_RGB).unsqueeze(0)
-
-    
-    full_size = [image_sparse.shape[1], image_sparse.shape[2]]
-    tile_size = [img_size, img_size]
-    tile_overlap = [tile_overlap, tile_overlap] 
-
-    tiling_module = TilingModule(
-        tile_size=tile_size,
-        tile_overlap=tile_overlap,
-        base_size=full_size,
-    )
-
-    tiles_sparse = tiling_module.split_into_tiles(tensor_sparse).float().to(device)
-    tiles_rgb = tiling_module.split_into_tiles(tensor_RGB).float().to(device)
-    sparse_batches = torch.split(tiles_sparse, n_batches)
-    rgb_batches = torch.split(tiles_rgb, n_batches)
-    
-    conditioning_tensor = [conditioning for _ in range(n_batches)]
-    conditioning_tensor = torch.tensor(conditioning_tensor)
-    conditioning_tensor[:, 0] = conditioning_tensor[:, 0]/6400
-    conditioning_tensor = conditioning_tensor[:, :1]
-    conditioning_tensor = conditioning_tensor.float().to(device)  
-
-    processed_batches = []
-    with torch.no_grad():
-        for sparse, rgb in zip(sparse_batches, rgb_batches):
-            B = sparse.shape[0]
-            processed_batches.append(model(sparse, conditioning_tensor[:B,], rgb))
-
-    tiles = torch.cat(processed_batches, dim=0)
-    stitched = tiling_module.rebuild_with_masks(tiles).detach().cpu().numpy()[0]
-    # stitched += image_RGB
-    return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
-
-
 
 def download_file(url: str, dest_path: Path):
     """Downloads a file from a URL to a destination path with a progress bar."""
@@ -218,7 +172,7 @@ def download_file(url: str, dest_path: Path):
                 bar.update(len(data))
                 f.write(data)
 
-        print("✅ Download complete.")
+        print("Download complete.")
         return True
 
     except requests.exceptions.RequestException as e:

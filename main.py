@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 from RawRefinery.model.Cond_NAFNet import load_model
+from RawRefinery.model.Restorer import make_sparse
 from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gamma
 from RawRefinery.application.ModelHandler import ModelHandler
 from RawRefinery.application.dng_utils import to_dng
@@ -25,7 +26,7 @@ def generate_path():
     else:
         base_path = Path(__file__).parent
 
-    weights_path = base_path / 'weights' / 'shadow_aware_random_vgg.pt'
+    weights_path = base_path / 'weights' / 'RGGB_v1_trace.pt'
     return weights_path
 
 class RawRefineryApp(QMainWindow):
@@ -122,14 +123,8 @@ class RawRefineryApp(QMainWindow):
         self.original_pixmap = None
 
         # -- Denoising Model --
-        if torch.mps.is_available():
-            self.device  = 'mps' 
-        elif torch.cuda.is_available():
-            self.device  = 'cuda' 
-        else:
-            self.device = 'cpu'
-        model = load_model(model_path).eval()
-        self.mh = ModelHandler(model, self.device, colorspace='lin_rec2020')
+        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+        self.mh = ModelHandler(model_path, self.device, colorspace='lin_rec2020')
 
     def open_folder_dialog(self):
         """

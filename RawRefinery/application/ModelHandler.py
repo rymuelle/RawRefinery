@@ -21,7 +21,6 @@ class ModelHandler():
         model_path: Path = data_dir / model_name
 
 
-        # 3. Check if the directory and the file exist
         if model_path.is_file():
             print(f"Model weights found at: {model_path}")
         else:
@@ -111,15 +110,11 @@ def tile_image_rggb(rh, device, conditioning, model,
 
 
     # Set up AMP
-    # Choose autocast configuration based on device
     if device.type == 'mps':
-        # MPS only supports float16 autocast (not bfloat16)
         autocast_dtype = torch.float16
     elif device.type == 'cuda':
-        # CUDA supports both, but float16 is typical
         autocast_dtype = torch.float16
     else:
-        # CPU: autocast works best with bfloat16 if available
         autocast_dtype = torch.bfloat16
 
 
@@ -227,7 +222,7 @@ def download_file(url: str, dest_path: Path):
         return True
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error during download: {e}")
+        print(f"Error during download: {e}")
         # Clean up the partial file if it exists
         if dest_path.is_file():
              dest_path.unlink()

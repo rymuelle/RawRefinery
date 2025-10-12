@@ -20,20 +20,12 @@ from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gam
 from RawRefinery.application.ModelHandler import ModelHandler
 from RawRefinery.application.dng_utils import to_dng
 
-def generate_path():
-    if getattr(sys, 'frozen', False):
-        base_path = Path(sys._MEIPASS)
-    else:
-        base_path = Path(__file__).parent
-
-    weights_path = base_path / 'weights' / 'RGGB_v1_trace.pt'
-    return weights_path
 
 class RawRefineryApp(QMainWindow):
     """
     A PySide6 application for browsing and 'denoising' raw image files.
     """
-    def __init__(self, model_path=generate_path()):
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("Raw Refinery")
         self.setGeometry(200, 200, 200, 200)
@@ -124,7 +116,7 @@ class RawRefineryApp(QMainWindow):
 
         # -- Denoising Model --
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-        self.mh = ModelHandler(model_path, self.device, colorspace='lin_rec2020')
+        self.mh = ModelHandler("RGGB_v1_trace.py", self.device, colorspace='lin_rec2020')
 
     def open_folder_dialog(self):
         """
@@ -227,7 +219,7 @@ class RawRefineryApp(QMainWindow):
         
         denoise_amount = self.iso_level_spinbox.value()
         grain_amount = self.grain_amount_spinbox.value()
-        img_rgb, denoised = self.mh.tile([denoise_amount, 0], dims = self.dims, apply_gamma=True)
+        img_rgb, denoised = self.mh.tile([denoise_amount, grain_amount], dims = self.dims, apply_gamma=True)
         self.img_rgb = denoised
         img = numpy_to_qimage_rgb(self.img_rgb)
         denoised_pixmap = QPixmap.fromImage(img)

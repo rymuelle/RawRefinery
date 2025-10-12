@@ -82,53 +82,68 @@ class ModelHandler():
          return thumbnail
 
 def tile_image_rggb(rh, device, conditioning, model,
-               img_size = 128,
-               tile_overlap=0.25,
-               batch_size=1,
-               dims=None,
-               ):
+                    img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
 
     image_RGGB = rh.as_rggb(dims=dims)
     image_RGB = rh.as_rgb(dims=dims)
-    tensor_image = torch.tensor(image_RGGB).unsqueeze(0)
+    tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
 
-    
     full_size = [image_RGGB.shape[1], image_RGGB.shape[2]]
     tile_size = [img_size, img_size]
-    tile_overlap = [tile_overlap, tile_overlap] 
+    overlap = [tile_overlap, tile_overlap]
 
-    tiling_module = TilingModule(
-        tile_size=tile_size,
-        tile_overlap=tile_overlap,
-        base_size=full_size,
-    )
-
-    full_size = [image_RGGB.shape[1]*2, image_RGGB.shape[2]*2]
-    tile_size = [img_size*2, img_size*2]
-    tiling_module_rebuild = TilingModule(
-        tile_size=tile_size,
-        tile_overlap=tile_overlap,
-        base_size=full_size,
-    )
+    tiling_module = TilingModule(tile_size=tile_size, tile_overlap=overlap, base_size=full_size)
+    tiling_module_rebuild = TilingModule(tile_size=[s*2 for s in tile_size],
+                                         tile_overlap=overlap,
+                                         base_size=[s*2 for s in full_size])
 
     tiles = tiling_module.split_into_tiles(tensor_image).float().to(device)
     batches = torch.split(tiles, batch_size)
-    
-    conditioning_tensor = [conditioning for _ in range(batch_size)]
-    conditioning_tensor = torch.tensor(conditioning_tensor)
-    conditioning_tensor[:, 0] =conditioning_tensor[:, 0]/6400
-    conditioning_tensor = conditioning_tensor.float().to(device)  
+
+    conditioning_tensor = (
+        torch.as_tensor(conditioning, device=device)
+        .float()
+        .unsqueeze(0)
+    )
+    conditioning_tensor[:, 0] /= 6400
 
     processed_batches = []
+
+
+    # Set up AMP
+    # Choose autocast configuration based on device
+    if device.type == 'mps':
+        # MPS only supports float16 autocast (not bfloat16)
+        autocast_dtype = torch.float16
+    elif device.type == 'cuda':
+        # CUDA supports both, but float16 is typical
+        autocast_dtype = torch.float16
+    else:
+        # CPU: autocast works best with bfloat16 if available
+        autocast_dtype = torch.bfloat16
+
+
     with torch.no_grad():
-        for batch in batches:
-            B = batch.shape[0]
-            output = model(batch, conditioning_tensor[:B, :])
-            processed_batches.append(output)
+        with torch.autocast(device_type=device.type, dtype=autocast_dtype):
+            for batch in batches:
+                B = batch.shape[0]
+                output = model(batch, conditioning_tensor[:B, :])
+                processed_batches.append(output.cpu())  # move to CPU
+                del output
+                torch.cuda.empty_cache()
 
     tiles = torch.cat(processed_batches, dim=0)
-    stitched = tiling_module_rebuild.rebuild_with_masks(tiles).detach().cpu().numpy()[0]
+    stitched = (
+        tiling_module_rebuild.rebuild_with_masks(tiles)
+        .detach()
+        .cpu()
+        .numpy()[0]
+    )
+
     stitched += image_RGB
+    del tiles, batches, processed_batches, conditioning_tensor
+    torch.cuda.empty_cache()
+
     return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
 
 

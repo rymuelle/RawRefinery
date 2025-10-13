@@ -2,6 +2,12 @@
 ![RawRefinery main window](https://github.com/rymuelle/RawRefinery/blob/main/examples/RawRefinery.png)
 
 
+<div align="center">
+  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/Bayer_TEST_MuseeL-bluebirds-A7C_ISO65535_sha1=eb9cb3e1d80f48b93d0aabe20458870c5c1ef2fa.jpg" alt="Noisy Image" width="300"/>
+  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/Bayer_TEST_MuseeL-bluebirds-A7C_ISO65535_sha1=eb9cb3e1d80f48b93d0aabe20458870c5c1ef2fa_65534_denoised.DNG.jpg" alt="Denoised" width="300"/>
+</div>
+
+
 
 ## MacOS build instructions
 

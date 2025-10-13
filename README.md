@@ -1,4 +1,19 @@
 # RawRefinery
+![RawRefinery main window](https://github.com/rymuelle/RawRefinery/blob/main/examples/RawRefinery.png)
+
+
+
+## MacOS build instructions
+
+
+### Clean up
+
+rm -rf build dist __pycache__ 
+
+### Producing the APP
+
+In the 
+pyinstaller main.spec
 
 
 ### Make DMG

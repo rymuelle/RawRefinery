@@ -81,3 +81,11 @@ Feature requests and community contributions are welcome!
 If you encounter issues or have suggestions, please open an [issue](https://github.com/rymuelle/RawRefinery/issues) on GitHub.
 You can also share before/after results or performance feedback to help guide model improvements.
 
+----
+
+## Acknowledgments
+
+With thanks to the creators of the RawNIND dataset.
+
+
+Brummer, Benoit; De Vleeschouwer, Christophe, 2025, "Raw Natural Image Noise Dataset", https://doi.org/10.14428/DVN/DEQCIM, Open Data @ UCLouvain, V1 

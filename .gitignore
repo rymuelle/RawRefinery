@@ -1,2 +1,10 @@
 *.DNG
 *.xmp
+*.dmg
+*.pyc
+*.egg-info
+.DS_Store
+
+build/
+dist/
+mlruns/

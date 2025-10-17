@@ -27,7 +27,7 @@ It uses a deep learning–based denoising model designed to preserve fine image 
 ## Installation
 
 Download the macOS build here:
-➡️ [**RawRefinery v1.1.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/tag/v1.1.0-alpha)
+[**RawRefinery v1.1.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/tag/v1.1.0-alpha)
 
 Windows and Linux versions are coming soon, along with setup instructions for building from source.
 
@@ -73,6 +73,15 @@ Bug reports and feedback on denoising performance are greatly appreciated.
 3. Improve user experience — progress bars, threading, and real-time responsiveness
 
 Feature requests and community contributions are welcome!
+---
+
+### Model Architecture and Training
+
+The model training code is currently being documented and refactored here:
+
+https://github.com/rymuelle/Restorer/tree/feature/mps
+
+The feature/mps branch contains the base model architecture and the training code, however, it is a current work in progress. 
 
 ---
 

@@ -2,8 +2,9 @@ import numpy as np
 from PySide6.QtGui import QImage
 
 
-def numpy_to_qimage_rgb(array):
-    array = apply_gamma(array)
+def numpy_to_qimage_rgb(array, gamma_correct=True):
+    if gamma_correct:
+        array = apply_gamma(array)
     array_uint8 = (np.clip(array, 0, 1) * 255).astype(np.uint8)
     array_uint8 = np.ascontiguousarray(array_uint8)
     height, width, channels = array.shape
@@ -21,3 +22,8 @@ def apply_gamma(tensor):
     )
     tensor[~img_mask] *= 12.92
     return tensor
+
+
+def linear_to_srgb(x):
+    a = 0.055
+    return np.where(x <= 0.0031308, 12.92 * x, (1 + a) * np.power(x, 1/2.4) - a)

@@ -29,7 +29,7 @@ class TestModelHandler(unittest.TestCase):
 
         # Create model handler
         device = torch.device('cpu')
-        mh = ModelHandler("RGGB_v1_trace.py", device, colorspace='lin_rec2020')
+        mh = ModelHandler("RGGB_v1_trace.pt", device, colorspace='lin_rec2020')
         mh.rh = rh
 
         # Tile

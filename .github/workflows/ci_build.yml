@@ -32,18 +32,18 @@ jobs:
           pip install -e .
           pip install pyinstaller
 
-      - name: 4. Run Tests
-        run: |
-          python -m unittest tests/test_model_handler.py
-
-      - name: 5. Run PyInstaller Build
+      - name: 4. Run PyInstaller Build
 
         run: |
           pyinstaller main.spec
                       
-      - name: 6. Save Built Installer as Artifact
+      - name: 5. Save Built Installer as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: rawrefinery-installer-${{ github.sha }} 
-          path: dist/RawRefinery-App* 
+          path: dist/RawRefinery* 
           retention-days: 1
+
+      - name: 6. Run Tests
+        run: |
+          python -m unittest tests/test_model_handler.py

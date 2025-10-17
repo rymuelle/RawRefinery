@@ -1,6 +1,6 @@
 [project]
 name = "RawRefinery" 
-version = "1.1.0"
+version = "1.1.1"
 description = "A demosaicing, denoising, and refining application for raw images."
 authors = [
     { name = "Ryan Mueller"},

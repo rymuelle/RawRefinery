@@ -113,7 +113,7 @@ class RawRefineryApp(QMainWindow):
 
         # -- Denoising Model --
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-        self.mh = ModelHandler("RGGB_v1_trace.py", self.device, colorspace='lin_rec2020')
+        self.mh = ModelHandler("RGGB_v1_trace.pt", self.device, colorspace='lin_rec2020')
 
     def open_folder_dialog(self):
         """

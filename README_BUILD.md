@@ -7,7 +7,6 @@ rm -rf build dist __pycache__
 
 ### Producing the APP
 
-In the 
 pyinstaller main.spec
 
 

@@ -1,12 +1,12 @@
 [project]
 name = "RawRefinery" 
-version = "0.0.1"
+version = "1.1.0"
 description = "A demosaicing, denoising, and refining application for raw images."
 authors = [
     { name = "Ryan Mueller"},
 ]
 readme = "README.md"
-requires-python = ">=3.8" 
+requires-python = "==3.13.7" 
 license = { file = "LICENSE" }
 keywords = ["python", "Machine Learning", "Camera Raw"]
 classifiers = [
@@ -15,12 +15,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-
-    ]
-
-[project.optional-dependencies]
-
-preprocessing = [
+    "pidng ==4.0.9",
+    "pyside6 ==6.9.3",
+    "numpy ==2.3.3",
+    "torch ==2.8.0",
+    "RawHandler ==0.0.2",
+    "colour_demosaicing ==0.2.6",
+    "blended_tiling ==0.0.1.dev7",
+    "requests ==2.32.5",
 ]
 
 [project.urls]

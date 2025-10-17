@@ -38,7 +38,7 @@ class TestModelHandler(unittest.TestCase):
         # Check shape
         assert denoised.shape == (dim, dim, 3), "Output has wrong dimensions"
 
-        assert img_rgb== (dim, dim, 3), "Output has wrong dimensions"
+        assert img_rgb.shape == (dim, dim, 3), "Output has wrong dimensions"
 
 if __name__ == "__main__":
     unittest.main()

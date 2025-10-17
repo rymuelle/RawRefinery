@@ -1,5 +1,4 @@
 from RawHandler.RawHandler import RawHandler
-from RawRefinery.utils.viewing_utils import linear_to_srgb
 import torch
 from blended_tiling import TilingModule
 import numpy as np
@@ -15,11 +14,10 @@ class ModelHandler():
     def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020'):
 
         app_name = "RawRefinery"
-        model_url = "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt" 
+        model_url = f"https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/{model_name}" 
 
         data_dir: Path = Path(user_data_dir(app_name))
         model_path: Path = data_dir / model_name
-
 
         if model_path.is_file():
             print(f"Model weights found at: {model_path}")
@@ -50,13 +48,9 @@ class ModelHandler():
         else:
             self.iso = 100
     
-    def tile(self, conditioning, dims=None, apply_gamma=False):
+    def tile(self, conditioning, dims=None):
         img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
-        # img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
         denoised_img = denoised_img * (1 - conditioning[1]/100) + img * conditioning[1]/100
-        if apply_gamma:
-            img = img ** (1/2.2)
-            denoised_img = denoised_img ** (1/2.2)
         return img, denoised_img
 
     def save_dng(self, filename, conditioning, dims=None):
@@ -77,7 +71,6 @@ class ModelHandler():
 
     def generate_thumbnail(self, min_preview_size=400):
          thumbnail = self.rh.generate_thumbnail(min_preview_size=min_preview_size, clip=True)
-         thumbnail = linear_to_srgb(thumbnail)
          return thumbnail
 
 def tile_image_rggb(rh, device, conditioning, model,
@@ -114,7 +107,7 @@ def tile_image_rggb(rh, device, conditioning, model,
     elif device.type == 'cuda':
         autocast_dtype = torch.float16
     else:
-        autocast_dtype = torch.bfloat16
+        autocast_dtype = torch.float16
 
 
     with torch.no_grad():
@@ -135,7 +128,8 @@ def tile_image_rggb(rh, device, conditioning, model,
     )
 
     stitched += image_RGB
-    # Blend based on grain mixer'
+
+    # Blend in grain
     alpha = conditioning[1] / 100
     stitched = (stitched * (1-alpha)) + image_RGB * alpha
     del tiles, batches, processed_batches, conditioning_tensor

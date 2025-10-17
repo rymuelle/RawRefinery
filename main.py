@@ -14,12 +14,9 @@ from RawHandler.RawHandler import RawHandler
 import numpy as np
 import torch
 
-from RawRefinery.model.Cond_NAFNet import load_model
-from RawRefinery.model.Restorer import make_sparse
 from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gamma
 from RawRefinery.application.ModelHandler import ModelHandler
 from RawRefinery.application.dng_utils import to_dng
-
 
 class RawRefineryApp(QMainWindow):
     """
@@ -116,7 +113,7 @@ class RawRefineryApp(QMainWindow):
 
         # -- Denoising Model --
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-        self.mh = ModelHandler("RGGB_v1_trace.py", self.device, colorspace='lin_rec2020')
+        self.mh = ModelHandler("RGGB_v1_trace.pt", self.device, colorspace='lin_rec2020')
 
     def open_folder_dialog(self):
         """
@@ -162,23 +159,17 @@ class RawRefineryApp(QMainWindow):
         filename = current_item.text()
         
         self.current_file_path = os.path.join(self.current_folder, filename)
-
         try:
             # Create a simple placeholder image
             self.mh.get_rh(self.current_file_path)
             self.iso_level_spinbox.setValue(self.mh.iso)
-
             # Reset dim location
             self.set_dims()
-
             self.preview_denoised_image()
             self.image_preview_label.setText("") # Clear the initial text      
 
             # Generate thumbnail
             img_rgb = self.mh.generate_thumbnail(min_preview_size=400)
-
-            print("max val thumbnail", img_rgb.max())
-            print(img_rgb.shape)
             image = numpy_to_qimage_rgb(img_rgb)
             self.update_image_thumbnail(image)
             self.image_thumbnail_label.setText("") # Clear the initial text
@@ -219,13 +210,11 @@ class RawRefineryApp(QMainWindow):
         
         denoise_amount = self.iso_level_spinbox.value()
         grain_amount = self.grain_amount_spinbox.value()
-        img_rgb, denoised = self.mh.tile([denoise_amount, grain_amount], dims = self.dims, apply_gamma=True)
+        img_rgb, denoised = self.mh.tile([denoise_amount, grain_amount], dims = self.dims)
         self.img_rgb = denoised
         img = numpy_to_qimage_rgb(self.img_rgb)
         denoised_pixmap = QPixmap.fromImage(img)
         self.update_image_preview(denoised_pixmap)
-        print(f"Denoising with amount: {denoise_amount} { denoise_amount/1000.}")
-
 
     def save_full_image(self):
         """

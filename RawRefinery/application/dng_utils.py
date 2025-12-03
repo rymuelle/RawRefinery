@@ -5,6 +5,24 @@ from pidng.defs import *
 def get_ratios(string, rh):
     return [x.as_integer_ratio() for x in rh.full_metadata[string].values]
 
+
+def get_as_shot_neutral(rh, denominator=10000):
+
+    cam_mul = rh.core_metadata.camera_white_balance
+    
+    if cam_mul[0] == 0 or cam_mul[2] == 0:
+        return [[denominator, denominator], [denominator, denominator], [denominator, denominator]]
+
+    r_neutral = cam_mul[1] / cam_mul[0]
+    g_neutral = 1.0 
+    b_neutral = cam_mul[1] / cam_mul[2]
+
+    return [
+        [int(r_neutral * denominator), denominator],
+        [int(g_neutral * denominator), denominator],
+        [int(b_neutral * denominator), denominator],
+    ]
+
 def to_dng(uint_img, rh, filepath, ccm1):
     width = uint_img.shape[1]
     height = uint_img.shape[0]
@@ -35,7 +53,8 @@ def to_dng(uint_img, rh, filepath, ccm1):
 
     t.set(Tag.ColorMatrix1, ccm1)
     t.set(Tag.CalibrationIlluminant1, CalibrationIlluminant.D65)
-    # t.set(Tag.AsShotNeutral, [[1,1],[1,1],[1,1]])
+    wb = get_as_shot_neutral(rh)
+    t.set(Tag.AsShotNeutral, wb)
     t.set(Tag.BaselineExposure, [[0,100]])
     t.set(Tag.Make, rh.full_metadata['Image Make'].values)
     t.set(Tag.Model, rh.full_metadata['Image Model'].values)

@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap, QImage, QMouseEvent
 from PySide6.QtCore import Qt, QSize, Signal
 
-from RawHandler.RawHandler import RawHandler
 import numpy as np
 import torch
 

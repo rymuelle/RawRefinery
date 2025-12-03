@@ -100,11 +100,14 @@ class RawRefineryApp(QMainWindow):
         self.btn_preview_denoise.clicked.connect(self.preview_denoised_image)
         
         self.btn_save_full = QPushButton("Save Denoised Image")
-        self.btn_save_full.clicked.connect(self.save_full_image)
+        self.btn_save_full.clicked.connect(lambda: self.save_full_image(save_cfa=False))
+        self.btn_save_full_cfa = QPushButton("Save Denoised Image (CFA)")
+        self.btn_save_full_cfa.clicked.connect(lambda: self.save_full_image(save_cfa=True))
 
         self.right_layout.addLayout(self.controls_layout)
         self.right_layout.addWidget(self.btn_preview_denoise)
         self.right_layout.addWidget(self.btn_save_full)
+        self.right_layout.addWidget(self.btn_save_full_cfa)
 
         self.main_layout.addWidget(self.right_panel, 2) # 2/3 of the space
 
@@ -226,7 +229,7 @@ class RawRefineryApp(QMainWindow):
         print(f"Denoising with amount: {denoise_amount} { denoise_amount/1000.}")
 
 
-    def save_full_image(self):
+    def save_full_image(self, save_cfa=False):
         """
         Runs the 'denoising' on the full image and saves the output.
         """
@@ -244,7 +247,7 @@ class RawRefineryApp(QMainWindow):
 
         if output_filename:
             try:
-                self.mh.save_dng(output_filename, [denoise_amount, 0])    
+                self.mh.save_dng(output_filename, [denoise_amount, 0], save_cfa=save_cfa)    
             except Exception as e:
                 QMessageBox.critical(self, "Save Error", f"Could not save the image.\nError: {e}")
 

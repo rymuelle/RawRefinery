@@ -17,8 +17,7 @@ from RawRefinery.model.Cond_NAFNet import load_model
 from RawRefinery.model.Restorer import make_sparse
 from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gamma
 from RawRefinery.application.ModelHandler import ModelHandler
-from RawRefinery.application.dng_utils import to_dng
-
+from RawRefinery.application.dng_utils import to_dng, convert_ccm_to_rational
 
 class RawRefineryApp(QMainWindow):
     """
@@ -104,11 +103,15 @@ class RawRefineryApp(QMainWindow):
         self.btn_save_full_cfa = QPushButton("Save Denoised Image (CFA)")
         self.btn_save_full_cfa.clicked.connect(lambda: self.save_full_image(save_cfa=True))
 
+        self.btn_save_patch = QPushButton("Save Test Patch")
+        self.btn_save_patch.clicked.connect(lambda: self.save_patch())
+
         self.right_layout.addLayout(self.controls_layout)
         self.right_layout.addWidget(self.btn_preview_denoise)
         self.right_layout.addWidget(self.btn_save_full)
         self.right_layout.addWidget(self.btn_save_full_cfa)
-
+        self.right_layout.addWidget(self.btn_save_patch)
+        
         self.main_layout.addWidget(self.right_panel, 2) # 2/3 of the space
 
         # --- State Variables ---
@@ -228,6 +231,16 @@ class RawRefineryApp(QMainWindow):
         self.update_image_preview(denoised_pixmap)
         print(f"Denoising with amount: {denoise_amount} { denoise_amount/1000.}")
 
+    def save_patch(self, ):
+        cfa = self.mh.rh._input_handler(dims=self.dims)
+        cfa = np.squeeze(cfa, axis=0)
+        output_filename, _ = QFileDialog.getSaveFileName(
+            self, "Save Denoised Image",
+            os.path.splitext(self.current_file_path)[0] + f"_patch.dng",
+            "DNG Image (*.dng)"
+        )
+        ccm1 = convert_ccm_to_rational(self.mh.rh.core_metadata.rgb_xyz_matrix[:3, :])
+        to_dng(cfa, self.mh.rh, output_filename, ccm1, save_cfa=True, convert_to_cfa=False, use_orig_wb_points=True)
 
     def save_full_image(self, save_cfa=False):
         """
@@ -241,8 +254,8 @@ class RawRefineryApp(QMainWindow):
 
         output_filename, _ = QFileDialog.getSaveFileName(
             self, "Save Denoised Image",
-            os.path.splitext(self.current_file_path)[0] + f"_{denoise_amount}_denoised.DNG",
-            "DNG Image (*.DNG)"
+            os.path.splitext(self.current_file_path)[0] + f"_{denoise_amount}_denoised.dng",
+            "DNG Image (*.dng)"
         )
 
         if output_filename:

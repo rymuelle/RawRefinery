@@ -22,6 +22,13 @@ def get_as_shot_neutral(rh, denominator=10000):
         [int(g_neutral * denominator), denominator],
         [int(b_neutral * denominator), denominator],
     ]
+def convert_ccm_to_rational(matrix_3x3, denominator=10000):
+
+    numerator_matrix = np.round(matrix_3x3 * denominator).astype(int)
+    numerators_flat = numerator_matrix.flatten()
+    ccm_rational = [[num, denominator] for num in numerators_flat]
+    
+    return ccm_rational
 
 
    
@@ -84,29 +91,31 @@ def simulate_CFA(image, pattern="RGGB", cfa_type="bayer"):
 
     return cfa.sum(axis=2), sparse_mask
 
-def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True):
+def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True, convert_to_cfa=True, use_orig_wb_points=False):
     width = uint_img.shape[1]
     height = uint_img.shape[0]
     bpp = 16 
 
-    exposures = get_ratios('EXIF ExposureTime', rh)
-    fnumber = get_ratios('EXIF FNumber', rh)
-    ExposureBiasValue = get_ratios('EXIF ExposureBiasValue', rh) 
-    FocalLength = get_ratios('EXIF FocalLength', rh) 
-
     t = DNGTags()
 
     if save_cfa:
-      cfa, _ = simulate_CFA(uint_img, pattern="RGGB", cfa_type="bayer")
-      uint_img = cfa.astype(np.uint16)
+      if convert_to_cfa:
+        cfa, _ = simulate_CFA(uint_img, pattern="RGGB", cfa_type="bayer")
+        uint_img = cfa.astype(np.uint16)
       t.set(Tag.BitsPerSample, bpp)
       t.set(Tag.SamplesPerPixel, 1) 
       t.set(Tag.PhotometricInterpretation, PhotometricInterpretation.Color_Filter_Array)
       t.set(Tag.CFARepeatPatternDim, [2,2])
       t.set(Tag.CFAPattern, CFAPattern.RGGB)
       t.set(Tag.BlackLevelRepeatDim, [2,2])
-      t.set(Tag.BlackLevel, [0, 0, 0, 0])
-      t.set(Tag.WhiteLevel, 65535)
+      # This should not be used except to save testing patches
+      if use_orig_wb_points:
+        bl = rh.core_metadata.black_level_per_channel
+        t.set(Tag.BlackLevel, bl)
+        t.set(Tag.WhiteLevel, rh.core_metadata.white_level)
+      else:
+        t.set(Tag.BlackLevel, [0, 0, 0, 0])
+        t.set(Tag.WhiteLevel, 65535)
     else:
       t.set(Tag.BitsPerSample, [bpp, bpp, bpp]) # 3 channels for RGB
       t.set(Tag.SamplesPerPixel, 3) # 3 for RGB
@@ -130,14 +139,19 @@ def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True):
     t.set(Tag.Make, rh.full_metadata['Image Make'].values)
     t.set(Tag.Model, rh.full_metadata['Image Model'].values)
 
-
-
-    t.set(Tag.FocalLength, FocalLength)
-    t.set(Tag.EXIFPhotoLensModel, rh.full_metadata['EXIF LensModel'].values)
-    t.set(Tag.ExposureBiasValue, ExposureBiasValue)
-    t.set(Tag.ExposureTime, exposures)
-    t.set(Tag.FNumber, fnumber)
-    t.set(Tag.PhotographicSensitivity, rh.full_metadata['EXIF ISOSpeedRatings'].values)
+    try:
+      exposures = get_ratios('EXIF ExposureTime', rh)
+      fnumber = get_ratios('EXIF FNumber', rh)
+      ExposureBiasValue = get_ratios('EXIF ExposureBiasValue', rh) 
+      FocalLength = get_ratios('EXIF FocalLength', rh) 
+      t.set(Tag.FocalLength, FocalLength)
+      t.set(Tag.EXIFPhotoLensModel, rh.full_metadata['EXIF LensModel'].values)
+      t.set(Tag.ExposureBiasValue, ExposureBiasValue)
+      t.set(Tag.ExposureTime, exposures)
+      t.set(Tag.FNumber, fnumber)
+      t.set(Tag.PhotographicSensitivity, rh.full_metadata['EXIF ISOSpeedRatings'].values)
+    except:
+      print("Could not save EXIF")
     t.set(Tag.DNGVersion, DNGVersion.V1_4)
     t.set(Tag.DNGBackwardVersion, DNGVersion.V1_2)
     t.set(Tag.PreviewColorSpace, PreviewColorSpace.Adobe_RGB)

@@ -11,23 +11,30 @@ from platformdirs import user_data_dir
 import requests
 from tqdm import tqdm
 
-class ModelHandler():
-    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020'):
+from PySide6.QtCore import QObject, Signal, Slot
 
-        app_name = "RawRefinery"
-        model_url = "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt" 
+class ModelHandler(QObject):
+    percent_done = Signal(float)
+    
+    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020', use_path='/Volumes/EasyStore/Downloads/shadow_aware(1).pt'):
+        super().__init__()
+        if not use_path:
+            app_name = "RawRefinery"
+            model_url = "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt" 
 
-        data_dir: Path = Path(user_data_dir(app_name))
-        model_path: Path = data_dir / model_name
+            data_dir: Path = Path(user_data_dir(app_name))
+            model_path: Path = data_dir / model_name
 
 
-        if model_path.is_file():
-            print(f"Model weights found at: {model_path}")
+            if model_path.is_file():
+                print(f"Model weights found at: {model_path}")
+            else:
+                print(f"Model weights not found. Expected path: {model_path}")
+                download_file(model_url, model_path)
         else:
-            print(f"Model weights not found. Expected path: {model_path}")
-            download_file(model_url, model_path)
-
-        model = torch.jit.load(model_path)
+            model_path = use_path
+        print(model_path)
+        model = torch.jit.load(model_path, map_location='cpu')
         self.model = model.eval().to(device)
 
         self.rh = None
@@ -51,7 +58,7 @@ class ModelHandler():
             self.iso = 100
     
     def tile(self, conditioning, dims=None, apply_gamma=False):
-        img, denoised_img = tile_image_rggb(self.rh, self.device, conditioning, self.model, dims=dims)
+        img, denoised_img = self.tile_image(self.rh, self.device, conditioning, self.model, dims=dims)
         # img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
         denoised_img = denoised_img * (1 - conditioning[1]/100) + img * conditioning[1]/100
         if apply_gamma:
@@ -59,7 +66,7 @@ class ModelHandler():
             denoised_img = denoised_img ** (1/2.2)
         return img, denoised_img
 
-    def save_dng(self, filename, conditioning, dims=None):
+    def save_dng(self, filename, conditioning, dims=None, save_cfa=False):
             img, denoised_img = self.tile(conditioning, dims=dims)
 
             transform_matrix = np.linalg.inv(
@@ -72,76 +79,86 @@ class ModelHandler():
             transformed = denoised_img @ transform_matrix.T
             uint_img = np.clip(transformed * 2**16-1, 0, 2**16-1).astype(np.uint16)
             ccm1 = convert_color_matrix(CCM)
+            to_dng(uint_img, self.rh, filename, ccm1, save_cfa=save_cfa, convert_to_cfa=True)
 
-            to_dng(uint_img, self.rh, filename, ccm1)
+
 
     def generate_thumbnail(self, min_preview_size=400):
          thumbnail = self.rh.generate_thumbnail(min_preview_size=min_preview_size, clip=True)
          thumbnail = linear_to_srgb(thumbnail)
          return thumbnail
 
-def tile_image_rggb(rh, device, conditioning, model,
-                    img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
-    image_RGGB = rh.as_rggb(dims=dims)
-    image_RGB = rh.as_rgb(dims=dims)
-    tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
+    def tile_image(self, rh, device, conditioning, model,
+                        img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
+        image_RGGB = rh.as_rggb(dims=dims, colorspace='lin_rec2020')
+        image_RGB = rh.as_rgb(dims=dims, demosaicing_func=demosaicing_CFA_Bayer_Malvar2004, colorspace='lin_rec2020', clip=False)
+        tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
+        tensor_RGB = torch.from_numpy(image_RGB).unsqueeze(0).contiguous()
 
-    full_size = [image_RGGB.shape[1], image_RGGB.shape[2]]
-    tile_size = [img_size, img_size]
-    overlap = [tile_overlap, tile_overlap]
+        full_size = [image_RGGB.shape[1], image_RGGB.shape[2]]
+        tile_size = [img_size, img_size]
+        overlap = [tile_overlap, tile_overlap]
 
-    tiling_module = TilingModule(tile_size=tile_size, tile_overlap=overlap, base_size=full_size)
-    tiling_module_rebuild = TilingModule(tile_size=[s*2 for s in tile_size],
-                                         tile_overlap=overlap,
-                                         base_size=[s*2 for s in full_size])
+        tiling_module = TilingModule(tile_size=tile_size, tile_overlap=overlap, base_size=full_size)
 
-    tiles = tiling_module.split_into_tiles(tensor_image).float().to(device)
-    batches = torch.split(tiles, batch_size)
-
-    conditioning_tensor = (
-        torch.as_tensor(conditioning, device=device)
-        .float()
-        .unsqueeze(0)
-    )
-    conditioning_tensor[:, 0] /= 6400
-    conditioning_tensor[:, 1] = 0
-    processed_batches = []
-
-
-    # Set up AMP
-    if device.type == 'mps':
-        autocast_dtype = torch.float16
-    elif device.type == 'cuda':
-        autocast_dtype = torch.float16
-    else:
-        autocast_dtype = torch.bfloat16
+        tiling_module_rgb = TilingModule(tile_size=[s*2 for s in tile_size], tile_overlap=overlap, base_size=[s*2 for s in full_size])
+        tiling_module_rebuild = TilingModule(tile_size=[s*2 for s in tile_size],
+                                            tile_overlap=overlap,
+                                            base_size=[s*2 for s in full_size])
+        
+        tiles = tiling_module.split_into_tiles(tensor_image).float().to(device)
+        tiles_rgb = tiling_module_rgb.split_into_tiles(tensor_RGB).float().to(device)
+        batches = torch.split(tiles, batch_size)
+        batches_rgb = torch.split(tiles_rgb, batch_size)
+        conditioning_tensor = (
+            torch.as_tensor(conditioning, device=device)
+            .float()
+            .unsqueeze(0)
+        )
+        conditioning_tensor[:, 0] /= 6400
+        conditioning_tensor[:, 1] = 0
+        conditioning_tensor = conditioning_tensor[:, 0:1]
+        processed_batches = []
 
 
-    with torch.no_grad():
-        with torch.autocast(device_type=device.type, dtype=autocast_dtype):
-            for batch in batches:
-                B = batch.shape[0]
-                output = model(batch, conditioning_tensor[:B, :])
-                processed_batches.append(output.cpu())  # move to CPU
-                del output
-                torch.cuda.empty_cache()
+        # Set up AMP
+        if device.type == 'mps':
+            autocast_dtype = torch.float16
+        elif device.type == 'cuda':
+            autocast_dtype = torch.float16
+        else:
+            autocast_dtype = torch.bfloat16
 
-    tiles = torch.cat(processed_batches, dim=0)
-    stitched = (
-        tiling_module_rebuild.rebuild_with_masks(tiles)
-        .detach()
-        .cpu()
-        .numpy()[0]
-    )
 
-    stitched += image_RGB
-    # Blend based on grain mixer'
-    alpha = conditioning[1] / 100
-    stitched = (stitched * (1-alpha)) + image_RGB * alpha
-    del tiles, batches, processed_batches, conditioning_tensor
-    torch.cuda.empty_cache()
+        total = len(batches_rgb)
+        idx = 0
+        with torch.no_grad():
+            with torch.autocast(device_type=device.type, dtype=autocast_dtype):
+                for batch, batch_rgb in zip(batches, batches_rgb):
+                    B = batch.shape[0]
+                    output = model(batch_rgb, conditioning_tensor[:B, :])
+                    processed_batches.append(output.cpu())  # move to CPU
+                    del output
+                    torch.cuda.empty_cache()
+                    idx += 1.
+                    self.percent_done.emit(idx/total)
 
-    return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
+
+        tiles = torch.cat(processed_batches, dim=0)
+        stitched = (
+            tiling_module_rebuild.rebuild_with_masks(tiles)
+            .detach()
+            .cpu()
+            .numpy()[0]
+        )
+
+        # Blend based on grain mixer'
+        alpha = conditioning[1] / 100
+        stitched = (stitched * (1-alpha)) + image_RGB * alpha
+        del tiles, batches, processed_batches, conditioning_tensor
+        torch.cuda.empty_cache()
+
+        return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
 
 def download_file(url: str, dest_path: Path):
     """Downloads a file from a URL to a destination path with a progress bar."""

@@ -15,8 +15,9 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 class ModelHandler(QObject):
     percent_done = Signal(float)
+    tiling_results = Signal(object, object)  
     
-    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020', use_path='/Volumes/EasyStore/Downloads/shadow_aware(1).pt'):
+    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020', use_path='/Volumes/EasyStore/Downloads/ShadowWeightedL1_300.pt'):
         super().__init__()
         if not use_path:
             app_name = "RawRefinery"
@@ -56,7 +57,12 @@ class ModelHandler(QObject):
             self.iso = int(self.rh.full_metadata['EXIF ISOSpeedRatings'].values[0])
         else:
             self.iso = 100
-    
+
+    @Slot(list, tuple, bool)
+    def tile_entrypoint(self, params, dims, apply_gamma):
+        img_rgb, denoised = self.tile(params, dims, apply_gamma)
+        self.tiling_results.emit(img_rgb, denoised)
+
     def tile(self, conditioning, dims=None, apply_gamma=False):
         img, denoised_img = self.tile_image(self.rh, self.device, conditioning, self.model, dims=dims)
         # img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
@@ -90,6 +96,9 @@ class ModelHandler(QObject):
 
     def tile_image(self, rh, device, conditioning, model,
                         img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
+        img_rgb = None                # safe init
+        denoised = None               # safe init
+
         image_RGGB = rh.as_rggb(dims=dims, colorspace='lin_rec2020')
         image_RGB = rh.as_rgb(dims=dims, demosaicing_func=demosaicing_CFA_Bayer_Malvar2004, colorspace='lin_rec2020', clip=False)
         tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()

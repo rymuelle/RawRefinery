@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from PySide6.QtGui import QPixmap, QImage, QMouseEvent
-from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtCore import Qt, QSize, Signal, QThread
 
 import numpy as np
 import torch
@@ -18,6 +18,7 @@ from RawRefinery.model.Restorer import make_sparse
 from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gamma
 from RawRefinery.application.ModelHandler import ModelHandler
 from RawRefinery.application.dng_utils import to_dng, convert_ccm_to_rational
+
 
 class RawRefineryApp(QMainWindow):
     """
@@ -102,26 +103,34 @@ class RawRefineryApp(QMainWindow):
         self.btn_save_full.clicked.connect(lambda: self.save_full_image(save_cfa=False))
         self.btn_save_full_cfa = QPushButton("Save Denoised Image (CFA)")
         self.btn_save_full_cfa.clicked.connect(lambda: self.save_full_image(save_cfa=True))
-
         self.btn_save_patch = QPushButton("Save Test Patch")
         self.btn_save_patch.clicked.connect(lambda: self.save_patch())
+        self.process_label = QLabel("")
 
         self.right_layout.addLayout(self.controls_layout)
         self.right_layout.addWidget(self.btn_preview_denoise)
         self.right_layout.addWidget(self.btn_save_full)
         self.right_layout.addWidget(self.btn_save_full_cfa)
         self.right_layout.addWidget(self.btn_save_patch)
-        
+
+        self.right_layout.addWidget(self.process_label)
+
         self.main_layout.addWidget(self.right_panel, 2) # 2/3 of the space
 
-        # --- State Variables ---
+        # State Variables
         self.current_folder = None
         self.current_file_path = None
         self.original_pixmap = None
 
-        # -- Denoising Model --
+        # Denoising Model
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.mh = ModelHandler("RGGB_v1_trace.py", self.device, colorspace='lin_rec2020')
+
+        # Update Progress bar
+        self.mh.percent_done.connect(self.set_progress)
+
+    def set_progress(self, percentage):
+        self.process_label.setText(f"{percentage*100:.1f}% Done.")
 
     def open_folder_dialog(self):
         """
@@ -219,17 +228,56 @@ class RawRefineryApp(QMainWindow):
         else:
             self.image_preview_label.setText("No image to display.")
 
-
     def preview_denoised_image(self):
-        
         denoise_amount = self.iso_level_spinbox.value()
         grain_amount = self.grain_amount_spinbox.value()
-        img_rgb, denoised = self.mh.tile([denoise_amount, grain_amount], dims = self.dims, apply_gamma=True)
+
+        self.thread = QThread()
+        self.mh.moveToThread(self.thread)
+
+        # connect signals
+        self.mh.percent_done.connect(self.set_progress)
+        self.mh.tiling_results.connect(self.on_tiling_done)
+        self.thread.started.connect(
+            lambda: self.mh.tile_entrypoint(
+                [denoise_amount, grain_amount],
+                self.dims,
+                True
+            )
+        )
+        self.thread.start()
+
+    def on_tiling_done(self, img_rgb, denoised):
         self.img_rgb = denoised
         img = numpy_to_qimage_rgb(self.img_rgb)
         denoised_pixmap = QPixmap.fromImage(img)
         self.update_image_preview(denoised_pixmap)
-        print(f"Denoising with amount: {denoise_amount} { denoise_amount/1000.}")
+        self.thread.quit()
+        self.thread.wait()
+
+
+    # def preview_denoised_image(self):
+        
+    #     denoise_amount = self.iso_level_spinbox.value()
+    #     grain_amount = self.grain_amount_spinbox.value()
+
+    #     self.future = QtConcurrent.run(
+    #         self.mh.tile, 
+    #         [denoise_amount, grain_amount],
+    #         dims=self.dims,
+    #         apply_gamma=True
+    #     )
+
+    #     # Watch for completion
+    #     self.watcher = QFutureWatcher()
+    #     self.watcher.setFuture(self.future)
+    #     self.watcher.finished.connect(self.on_preview_done)
+
+    #     # Progress still works normally
+    #     self.mh.percent_done.connect(self.set_progress)
+
+    # def on_preview_done(self):
+
 
     def save_patch(self, ):
         cfa = self.mh.rh._input_handler(dims=self.dims)

@@ -61,6 +61,16 @@ Windows and Linux versions are coming soon, along with setup instructions for bu
 
 ---
 
+### Model Architecture and Training
+
+The model training code is currently being documented and refactored here:
+
+https://github.com/rymuelle/Restorer/tree/feature/mps
+
+The feature/mps branch contains the base model architecture and the training code, however, it is a current work in progress. 
+
+---
+
 ## Development Status
 
 RawRefinery is currently in **pre-release alpha**, and testing is ongoing.

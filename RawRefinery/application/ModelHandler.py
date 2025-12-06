@@ -10,7 +10,6 @@ from PySide6.QtCore import QObject, Signal, Slot, QThread
 
 
 from RawHandler.RawHandler import RawHandler
-from RawRefinery.utils.viewing_utils import linear_to_srgb
 from blended_tiling import TilingModule
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
@@ -307,7 +306,7 @@ class ModelController(QObject):
     def generate_thumbnail(self, size=400):
         if not self.rh: return None
         thumb = self.rh.generate_thumbnail(min_preview_size=size, clip=True)
-        return linear_to_srgb(thumb)
+        return thumb
 
     def _download_file(self, url, dest_path):
         # (Keep your existing download logic here, simple version below)

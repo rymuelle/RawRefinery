@@ -12,8 +12,9 @@ from PySide6.QtCore import Qt, Slot
 # Import utils
 from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb
 from RawRefinery.application.ModelHandler import ModelController, MODEL_REGISTRY
-from  RawRefinery.application.ClickableImageLabel import ClickableImageLabel 
+from RawRefinery.application.ClickableImageLabel import ClickableImageLabel 
 from RawRefinery.application.dng_utils import to_dng, convert_ccm_to_rational
+from RawRefinery.application.LogarithmicSlider import LogarithmicSlider
 
 class RawRefineryApp(QMainWindow):
     def __init__(self):
@@ -33,7 +34,7 @@ class RawRefineryApp(QMainWindow):
         self.setup_ui()
         
         # Load default model
-        self.controller.load_model("ShadowWeightedL1")
+        self.controller.load_model("Tree Net Denoise")
 
     def loading_popup(self):
         popup = QMessageBox()
@@ -124,6 +125,13 @@ class RawRefineryApp(QMainWindow):
         self.controls_layout.addRow("Grain:", self.grain_slider)
         self.controls_layout.addRow("", self.grain_spin)
 
+        #Exposure 
+        self.exposure_slider = LogarithmicSlider(0.1, 10.)
+        self.exposure_slider.setNaturalValue(1.)
+        self.exposure_label = QLabel(f"Exposure adjustment (for visualization only): {self.exposure_slider.get_natural_value():.1f}")
+        self.exposure_slider.naturalValueChanged.connect(self.on_exposure_change)
+        self.controls_layout.addRow(self.exposure_label, self.exposure_slider)
+
         self.right_layout.addLayout(self.controls_layout)
 
         # Action Buttons
@@ -153,6 +161,14 @@ class RawRefineryApp(QMainWindow):
         self.current_folder = None
         self.current_file_path = None
     
+    def on_exposure_change(self, exposure):
+            # Set text
+            self.exposure_label.setText(f"Exposure adjustment (for visualization only): {exposure:.1f}")
+            # Show thumbnail
+            thumb_rgb = self.controller.generate_thumbnail()
+            qimg = numpy_to_qimage_rgb(thumb_rgb, exposure=exposure)
+            self.thumb_label.set_image(qimg)
+
 
     def open_folder_dialog(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -175,7 +191,7 @@ class RawRefineryApp(QMainWindow):
             
             # Show thumbnail
             thumb_rgb = self.controller.generate_thumbnail()
-            qimg = numpy_to_qimage_rgb(thumb_rgb)
+            qimg = numpy_to_qimage_rgb(thumb_rgb, exposure=self.exposure_slider.get_natural_value())
             self.thumb_label.set_image(qimg)
             
             # Reset default dims to center
@@ -273,7 +289,7 @@ class RawRefineryApp(QMainWindow):
         self.progress_bar.setValue(100)
         
         # Convert output to QImage
-        qimg = numpy_to_qimage_rgb(denoised)
+        qimg = numpy_to_qimage_rgb(denoised, exposure=self.exposure_slider.get_natural_value())
         pix = QPixmap.fromImage(qimg)
         
         # Scale for display

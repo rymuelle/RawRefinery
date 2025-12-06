@@ -2,7 +2,8 @@ import numpy as np
 from PySide6.QtGui import QImage
 
 
-def numpy_to_qimage_rgb(array, gamma_correct=True):
+def numpy_to_qimage_rgb(array, gamma_correct=True, exposure=1):
+    array *= exposure
     if gamma_correct:
         array = apply_gamma(array)
     array_uint8 = (np.clip(array, 0, 1) * 255).astype(np.uint8)

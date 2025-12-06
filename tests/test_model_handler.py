@@ -29,8 +29,6 @@ class TestModelHandler(unittest.TestCase):
 
         # Create model handler
         device = torch.device('cpu')
-        mh = ModelController("RGGB_v1_trace.pt", device, colorspace='lin_rec2020')
-
         mh = ModelController()
         mh.load_model("Tree Net Denoise Light")
 

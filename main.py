@@ -1,367 +1,307 @@
 import sys
-from pathlib import Path
 import os
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QPushButton, QFileDialog, QListWidget, QLabel,
-    QSlider, QSpinBox, QHBoxLayout, QFormLayout,
-    QMessageBox
-)
-from PySide6.QtGui import QPixmap, QImage, QMouseEvent
-from PySide6.QtCore import Qt, QSize, Signal, QThread
-
 import numpy as np
-import torch
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, 
+    QFileDialog, QListWidget, QLabel, QSlider, QSpinBox, 
+    QHBoxLayout, QFormLayout, QComboBox, QProgressBar, QMessageBox
+)
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, Slot
 
-from RawRefinery.model.Cond_NAFNet import load_model
-from RawRefinery.model.Restorer import make_sparse
-from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb, apply_gamma
-from RawRefinery.application.ModelHandler import ModelHandler
+# Import utils
+from RawRefinery.application.viewing_utils import numpy_to_qimage_rgb
+from RawRefinery.application.ModelHandler import ModelController, MODEL_REGISTRY
+from  RawRefinery.application.ClickableImageLabel import ClickableImageLabel 
 from RawRefinery.application.dng_utils import to_dng, convert_ccm_to_rational
 
-
 class RawRefineryApp(QMainWindow):
-    """
-    A PySide6 application for browsing and 'denoising' raw image files.
-    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Raw Refinery")
-        self.setGeometry(200, 200, 200, 200)
+        self.resize(1000, 700)
 
-        # --- Main Widget and Layout ---
+        # --- Logic Controller ---
+        self.controller = ModelController()
+        
+        # Connect Signals
+        self.controller.progress_update.connect(self.update_progress)
+        self.controller.preview_ready.connect(self.display_result)
+        self.controller.save_finished.connect(self.reset_after_save)
+        self.controller.error_occurred.connect(self.show_error)
+        self.controller.model_loaded.connect(lambda n: self.status_label.setText(f"Model Loaded: {n}"))
+        self.setup_ui()
+        
+        # Load default model
+        self.controller.load_model("ShadowWeightedL1")
+
+    def loading_popup(self):
+        popup = QMessageBox()
+        popup.setWindowTitle("Notice")
+        popup.setIcon(QMessageBox.Icon.Information)
+        popup.setText(
+            """
+            <h3>Alpha Release Notice</h3>
+            <p>This software is currently in Alpha. Please note:</p>
+            <ul>
+                <li>It may crash unexpectedly.</li>
+                <li>Expect memory usage up to <b>3 GB</b>.</li>
+                <li>CPU processing is slow. Use <b>MPS</b> or <b>CUDA</b> for best results.</li>
+            </ul>
+            """
+        )
+        popup.exec()
+
+    def setup_ui(self):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QHBoxLayout(self.central_widget)
 
-        # --- File List Panel (Left) ---
+        # --- Left Panel ---
         self.left_panel = QWidget()
         self.left_layout = QVBoxLayout(self.left_panel)
+        
         self.btn_open_folder = QPushButton("Open Folder")
         self.btn_open_folder.clicked.connect(self.open_folder_dialog)
-        self.file_list_widget = QListWidget()
-        self.file_list_widget.currentItemChanged.connect(self.on_file_selected)
+        
+        self.file_list = QListWidget()
+        self.file_list.currentItemChanged.connect(self.on_file_selected)
+        
         self.left_layout.addWidget(self.btn_open_folder)
-        self.left_layout.addWidget(self.file_list_widget)
-        self.main_layout.addWidget(self.left_panel, 1) # 1/3 of the space
+        self.left_layout.addWidget(self.file_list)
+        self.main_layout.addWidget(self.left_panel, 1)
 
-        # --- Preview and Control Panel (Right) ---
+        # --- Right Panel ---
         self.right_panel = QWidget()
         self.right_layout = QVBoxLayout(self.right_panel)
+
+        # Previews
+        self.preview_container = QWidget()
+        self.preview_layout = QHBoxLayout(self.preview_container)
+        self.thumb_label = ClickableImageLabel("Thumbnail", proportional=True)
+        self.preview_label = QLabel("Denoised Preview")
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setMinimumSize(400, 400)
         
-        # --- Horizontal Layout for Image Previews ---
-        self.preview_row_widget = QWidget()
-        self.preview_row_layout = QHBoxLayout(self.preview_row_widget)
-
-        # Create your labels
-        self.image_preview_label = QLabel("Preview")
-        self.image_thumbnail_label = ClickableImageLabel("Thumbnail", proportional=True)
-
-        # Common label styling (optional helper function for brevity)
-        for label in [self.image_thumbnail_label, self.image_preview_label]:
-            label.setAlignment(Qt.AlignCenter)
-            label.setMinimumSize(400, 400)
-            label.setMaximumSize(512, 512)
-            label.setStyleSheet("border: 1px solid #ccc; background-color: #f0f0f0;")
-            self.preview_row_layout.addWidget(label)
-
         # Connect thumbnail click
-        self.image_thumbnail_label.imageClicked.connect(self.update_preview)
-
-        # Add the HBox layout (wrapped in a QWidget) to the main VBox
-        self.right_layout.addWidget(self.preview_row_widget)
-
-        # --- Denoise Controls ---
-        self.controls_layout = QFormLayout()
-        self.iso_level_slider = QSlider(Qt.Horizontal)
-        self.iso_level_slider.setRange(0, 65534)
-        self.iso_level_slider.setMinimumWidth(200)
-        self.iso_level_spinbox = QSpinBox()
-        self.iso_level_spinbox.setRange(0, 65534)
-
-        self.grain_amount_slider = QSlider(Qt.Horizontal)
-        self.grain_amount_slider.setRange(0, 100)
-        self.grain_amount_slider.setMinimumWidth(200)
-        self.grain_amount_spinbox = QSpinBox()
-        self.grain_amount_spinbox.setRange(0, 100)
-
-        # Connect slider and spinbox
-        self.iso_level_slider.valueChanged.connect(self.iso_level_spinbox.setValue)
-        self.iso_level_spinbox.valueChanged.connect(self.iso_level_slider.setValue)
-        self.grain_amount_slider.valueChanged.connect(self.grain_amount_spinbox.setValue)
-        self.grain_amount_spinbox.valueChanged.connect(self.grain_amount_slider.setValue)
-
-        self.controls_layout.addRow("Image ISO: ", self.iso_level_slider)
-        self.controls_layout.addRow("", self.iso_level_spinbox)
-        self.controls_layout.addRow("Grain Amount:", self.grain_amount_slider)
-        self.controls_layout.addRow("", self.grain_amount_spinbox)
-
-        self.btn_preview_denoise = QPushButton("Preview Denoise")
-        self.btn_preview_denoise.clicked.connect(self.preview_denoised_image)
+        self.thumb_label.imageClicked.connect(self.on_thumbnail_click)
         
-        self.btn_save_full = QPushButton("Save Denoised Image")
-        self.btn_save_full.clicked.connect(lambda: self.save_full_image(save_cfa=False))
-        self.btn_save_full_cfa = QPushButton("Save Denoised Image (CFA)")
-        self.btn_save_full_cfa.clicked.connect(lambda: self.save_full_image(save_cfa=True))
-        self.btn_save_patch = QPushButton("Save Test Patch")
-        self.btn_save_patch.clicked.connect(lambda: self.save_patch())
-        self.process_label = QLabel("")
+        self.preview_layout.addWidget(self.thumb_label)
+        self.preview_layout.addWidget(self.preview_label)
+        self.right_layout.addWidget(self.preview_container)
+
+        # Controls
+        self.controls_layout = QFormLayout()
+        
+        # Model Selector
+        self.model_combo = QComboBox()
+        self.model_combo.addItems(MODEL_REGISTRY.keys())
+        self.model_combo.currentTextChanged.connect(self.controller.load_model)
+        self.controls_layout.addRow("Model:", self.model_combo)
+
+        # Device Selector
+        self.device_combo = QComboBox()
+        self.device_combo.addItems(self.controller.devices)
+        self.device_combo.currentTextChanged.connect(self.controller.set_device)
+        self.controls_layout.addRow("Device:", self.device_combo)
+
+        # ISO
+        self.iso_slider = QSlider(Qt.Horizontal)
+        self.iso_slider.setRange(0, 65534)
+        self.iso_spin = QSpinBox()
+        self.iso_spin.setRange(0, 65534)
+        self.iso_slider.valueChanged.connect(self.iso_spin.setValue)
+        self.iso_spin.valueChanged.connect(self.iso_slider.setValue)
+        self.controls_layout.addRow("ISO:", self.iso_slider)
+        self.controls_layout.addRow("", self.iso_spin)
+
+        # Grain
+        self.grain_slider = QSlider(Qt.Horizontal)
+        self.grain_slider.setRange(0, 100)
+        self.grain_spin = QSpinBox()
+        self.grain_spin.setRange(0, 100)
+        self.grain_slider.valueChanged.connect(self.grain_spin.setValue)
+        self.grain_spin.valueChanged.connect(self.grain_slider.setValue)
+        self.controls_layout.addRow("Grain:", self.grain_slider)
+        self.controls_layout.addRow("", self.grain_spin)
 
         self.right_layout.addLayout(self.controls_layout)
-        self.right_layout.addWidget(self.btn_preview_denoise)
-        self.right_layout.addWidget(self.btn_save_full)
-        self.right_layout.addWidget(self.btn_save_full_cfa)
-        self.right_layout.addWidget(self.btn_save_patch)
 
-        self.right_layout.addWidget(self.process_label)
+        # Action Buttons
+        self.btn_preview = QPushButton("Update Preview")
+        self.btn_preview.clicked.connect(self.trigger_preview)
+        self.right_layout.addWidget(self.btn_preview)
 
-        self.main_layout.addWidget(self.right_panel, 2) # 2/3 of the space
+        self.btn_save_cfa = QPushButton("Save CFA dng")
+        self.btn_save_cfa.clicked.connect(self.trigger_save)
+        self.right_layout.addWidget(self.btn_save_cfa)
 
-        # State Variables
+        self.btn_save_test_patch = QPushButton("Save Test Patch")
+        self.btn_save_test_patch.clicked.connect(self.trigger_save_test_patch)
+        self.right_layout.addWidget(self.btn_save_test_patch)
+
+        # Status
+        self.progress_bar = QProgressBar()
+        self.status_label = QLabel("Ready")
+        self.right_layout.addWidget(self.progress_bar)
+        self.right_layout.addWidget(self.status_label)
+
+        #Add Right Panel
+        self.main_layout.addWidget(self.right_panel, 2)
+        
+        # State
+        self.dims = None
         self.current_folder = None
         self.current_file_path = None
-        self.original_pixmap = None
-
-        # Denoising Model
-        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-        self.mh = ModelHandler("RGGB_v1_trace.py", self.device, colorspace='lin_rec2020')
-
-        # Update Progress bar
-        self.mh.percent_done.connect(self.set_progress)
-
-    def set_progress(self, percentage):
-        self.process_label.setText(f"{percentage*100:.1f}% Done.")
+    
 
     def open_folder_dialog(self):
-        """
-        Opens a dialog to select a directory.
-        """
-        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
-        if folder_path:
-            self.current_folder = folder_path
-            self.populate_file_list(folder_path)
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder")
+        if folder:
+            self.current_folder = folder
+            self.file_list.clear()
+            exts = ('.cr2', '.nef', '.arw', '.dng')
+            files = sorted([f for f in os.listdir(folder) if f.lower().endswith(exts)])
+            self.file_list.addItems(files)
 
-    def populate_file_list(self, folder_path):
-        """
-        Lists raw image files from the selected directory.
-        Supported formats: .cr2, .nef, .arw
-        """
-        self.file_list_widget.clear()
-        raw_extensions = ['.cr2', '.nef', '.arw', '.dng', '.orf', '.raf', '.pef']
+    def on_file_selected(self, item):
+        if not item: return
+        path = os.path.join(self.current_folder, item.text())
+        self.current_file_path = path
+        
         try:
-            files = os.listdir(folder_path)
-            files = sorted(files)
-            for filename in files:
-                if any(filename.lower().endswith(ext) for ext in raw_extensions):
-                    self.file_list_widget.addItem(filename)
+            # Load metadata
+            iso = self.controller.load_rh(path)
+            self.iso_spin.setValue(iso)
+            
+            # Show thumbnail
+            thumb_rgb = self.controller.generate_thumbnail()
+            qimg = numpy_to_qimage_rgb(thumb_rgb)
+            self.thumb_label.set_image(qimg)
+            
+            # Reset default dims to center
+            # (You can calculate center here based on rh.raw.shape)
+            self.dims = None 
+            self.preview_label.setText("Click thumbnail to preview region")
+            
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not read directory: {e}")
+            self.show_error(f"Failed to open file: {e}")
 
+    def on_thumbnail_click(self, x_ratio, y_ratio):
+        # Calculate dims based on click ratio and raw size
+        rh = self.controller.rh
+        H_full, W_full = rh.raw.shape
+        
+        # Center of click in raw coords
+        c_x = int(x_ratio * W_full)
+        c_y = int(y_ratio * H_full)
+        
+        w_preview, h_preview = 512, 512
+        
+        # Calculate crops
+        h_start = max(0, c_y - h_preview//2)
+        h_end = min(H_full, h_start + h_preview)
+        w_start = max(0, c_x - w_preview//2)
+        w_end = min(W_full, w_start + w_preview)
+        
+        self.dims = (h_start, h_end, w_start, w_end)
+        self.trigger_preview()
 
-    def update_preview(self, W, H):
-        H_o, W_o = self.mh.rh.raw.shape
-        H, W = int(H*H_o), int(W*W_o)
-        w, h = 512, 512
-        self.dims=(H - h//2, H + h//2, W - w//2, W + w//2)
-        self.preview_denoised_image()
+    def disable_ui(self):
+        self.btn_preview.setEnabled(False)
+        self.btn_save_cfa.setEnabled(False)
+        self.thumb_label.setEnabled(False)
 
-    def on_file_selected(self, current_item, previous_item):
-        """
-        Handles the selection of a file in the list.
-        Displays a placeholder image as a preview.
-        """
-        if current_item is None:
+    def enable_ui(self):
+        self.btn_preview.setEnabled(True)
+        self.btn_save_cfa.setEnabled(True)
+        self.thumb_label.setEnabled(True)
+
+    def trigger_preview(self):
+        if not self.dims:
+            self.status_label.setText("Select a region on thumbnail first.")
             return
-            
-        filename = current_item.text()
-        
-        self.current_file_path = os.path.join(self.current_folder, filename)
 
-        try:
-            # Create a simple placeholder image
-            self.mh.get_rh(self.current_file_path)
-            self.iso_level_spinbox.setValue(self.mh.iso)
+        conditioning = [self.iso_spin.value(), self.grain_spin.value()]
+        # Disable button to prevent spamming
+        self.disable_ui()
+        self.status_label.setText("Processing...")
+        # Fire off the worker
+        self.controller.run_inference(conditioning, self.dims)
 
-            # Reset dim location
-            self.set_dims()
-
-            self.preview_denoised_image()
-            self.image_preview_label.setText("") # Clear the initial text      
-
-            # Generate thumbnail
-            img_rgb = self.mh.generate_thumbnail(min_preview_size=400)
-
-            print("max val thumbnail", img_rgb.max())
-            print(img_rgb.shape)
-            image = numpy_to_qimage_rgb(img_rgb)
-            self.update_image_thumbnail(image)
-            self.image_thumbnail_label.setText("") # Clear the initial text
-            
-        except Exception as e:
-            self.image_preview_label.setText(f"Could not preview file:\n{e}")
-            self.original_pixmap = None
-            QMessageBox.warning(self, "Preview Error", f"Could not create a preview for {filename}.\nError: {e}")
-
-    def set_dims(self):
-        W, H = self.mh.rh.raw.shape
-        w, h = 800, 600
-        self.dims = (H//2 - h//2, H//2 + h//2, W//2 - w//2, W//2 + w//2)
-
-    def update_image_thumbnail(self, image):
-        """
-        Updates the image preview label with the given pixmap, scaled to fit.
-        """
-        if image:
-            self.image_thumbnail_label.set_image(image)
-        else:
-            self.image_thumbnail_label.setText("No image to display.")
-
-    def update_image_preview(self, pixmap):
-        """
-        Updates the image preview label with the given pixmap, scaled to fit.
-        """
-        if pixmap:
-            scaled_pixmap = pixmap.scaled(self.image_preview_label.size(), 
-                                          Qt.KeepAspectRatio, 
-                                          Qt.SmoothTransformation)
-            self.image_preview_label.setPixmap(scaled_pixmap)
-        else:
-            self.image_preview_label.setText("No image to display.")
-
-    def preview_denoised_image(self):
-        denoise_amount = self.iso_level_spinbox.value()
-        grain_amount = self.grain_amount_spinbox.value()
-
-        self.thread = QThread()
-        self.mh.moveToThread(self.thread)
-
-        # connect signals
-        self.mh.percent_done.connect(self.set_progress)
-        self.mh.tiling_results.connect(self.on_tiling_done)
-        self.thread.started.connect(
-            lambda: self.mh.tile_entrypoint(
-                [denoise_amount, grain_amount],
-                self.dims,
-                True
-            )
-        )
-        self.thread.start()
-
-    def on_tiling_done(self, img_rgb, denoised):
-        self.img_rgb = denoised
-        img = numpy_to_qimage_rgb(self.img_rgb)
-        denoised_pixmap = QPixmap.fromImage(img)
-        self.update_image_preview(denoised_pixmap)
-        self.thread.quit()
-        self.thread.wait()
-
-
-    # def preview_denoised_image(self):
-        
-    #     denoise_amount = self.iso_level_spinbox.value()
-    #     grain_amount = self.grain_amount_spinbox.value()
-
-    #     self.future = QtConcurrent.run(
-    #         self.mh.tile, 
-    #         [denoise_amount, grain_amount],
-    #         dims=self.dims,
-    #         apply_gamma=True
-    #     )
-
-    #     # Watch for completion
-    #     self.watcher = QFutureWatcher()
-    #     self.watcher.setFuture(self.future)
-    #     self.watcher.finished.connect(self.on_preview_done)
-
-    #     # Progress still works normally
-    #     self.mh.percent_done.connect(self.set_progress)
-
-    # def on_preview_done(self):
-
-
-    def save_patch(self, ):
-        cfa = self.mh.rh._input_handler(dims=self.dims)
-        cfa = np.squeeze(cfa, axis=0)
-        output_filename, _ = QFileDialog.getSaveFileName(
-            self, "Save Denoised Image",
-            os.path.splitext(self.current_file_path)[0] + f"_patch.dng",
-            "DNG Image (*.dng)"
-        )
-        ccm1 = convert_ccm_to_rational(self.mh.rh.core_metadata.rgb_xyz_matrix[:3, :])
-        to_dng(cfa, self.mh.rh, output_filename, ccm1, save_cfa=True, convert_to_cfa=False, use_orig_wb_points=True)
-
-    def save_full_image(self, save_cfa=False):
-        """
-        Runs the 'denoising' on the full image and saves the output.
-        """
+    def trigger_save(self):
         if not self.current_file_path:
-            QMessageBox.warning(self, "No File Selected", "Please select a file to denoise.")
-            return
-
-        denoise_amount = self.iso_level_spinbox.value()
-
+            self.status_label.setText("Select and image first.")
+            return 
+        
         output_filename, _ = QFileDialog.getSaveFileName(
             self, "Save Denoised Image",
-            os.path.splitext(self.current_file_path)[0] + f"_{denoise_amount}_denoised.dng",
+            os.path.splitext(self.current_file_path)[0] + "_denoised.dng",
             "DNG Image (*.dng)"
         )
 
-        if output_filename:
-            try:
-                self.mh.save_dng(output_filename, [denoise_amount, 0], save_cfa=save_cfa)    
-            except Exception as e:
-                QMessageBox.critical(self, "Save Error", f"Could not save the image.\nError: {e}")
+        conditioning = [self.iso_spin.value(), self.grain_spin.value()]
+        self.disable_ui()
+        self.status_label.setText("Processing...")
+        self.controller.save_image(output_filename, conditioning, save_cfa=True)
 
+    def trigger_save_test_patch(self):
+        if not self.current_file_path:
+            self.status_label.setText("Select and image first.")
+            return 
+        try:
+            output_filename, _ = QFileDialog.getSaveFileName(
+                self, "Save Denoised Image",
+                os.path.splitext(self.current_file_path)[0] + "_test_patch.dng",
+                "DNG Image (*.dng)"
+            )
+            cfa = self.controller.rh._input_handler(dims=self.dims)
+            cfa = np.squeeze(cfa, axis=0)
+            ccm1 = convert_ccm_to_rational(self.controller.rh.core_metadata.rgb_xyz_matrix[:3, :])
+            to_dng(cfa, self.controller.rh, output_filename, ccm1, save_cfa=True, convert_to_cfa=False, use_orig_wb_points=True)
+        except Exception as e:
+            self.show_error(f"Failed to save patch: {e}")
 
-class ClickableImageLabel(QLabel):
-    # Signal to emit when the image is clicked, passing mapped coordinates
-    imageClicked = Signal(float, float)
+    # --- Slots ---
+    @Slot(float)
+    def update_progress(self, val):
+        self.progress_bar.setValue(int(val * 100))
 
-    def __init__(self, parent=None, proportional=False):
-        super().__init__(parent)
-        self.original_image_size = QSize() # To store the original QImage size
-        self.proportional = proportional
+    @Slot(object, object)
+    def display_result(self, img_rgb, denoised):
+        self.enable_ui()
+        self.status_label.setText("Done.")
+        self.progress_bar.setValue(100)
+        
+        # Convert output to QImage
+        qimg = numpy_to_qimage_rgb(denoised)
+        pix = QPixmap.fromImage(qimg)
+        
+        # Scale for display
+        scaled = pix.scaled(self.preview_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.preview_label.setPixmap(scaled)
 
-    def set_image(self, qimage: QImage):
-        self.original_image_size = qimage.size()
-        pixmap = QPixmap.fromImage(qimage)
-        scaled_pixmap = pixmap.scaled(self.size(), 
-                                      Qt.KeepAspectRatio, 
-                                      Qt.SmoothTransformation)
-        self.setPixmap(pixmap)
-        self.setScaledContents(True)
+    @Slot(float)
+    def reset_after_save(self, str):
+        self.enable_ui()
+        self.status_label.setText(str)
+        self.progress_bar.setValue(100.)
 
-    def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.MouseButton.LeftButton:
-            # Get click position relative to the QLabel
-            label_x = event.pos().x()
-            label_y = event.pos().y()
+    @Slot(str)
+    def show_error(self, msg):
+        self.enable_ui()
+        self.status_label.setText("Error.")
+        QMessageBox.critical(self, "Error", msg)
 
-            # Calculate scaling factors
-            label_width = self.width()
-            label_height = self.height()
-            image_width = self.original_image_size.width()
-            image_height = self.original_image_size.height()
+    @Slot(str)
+    def display_device(self, device):
+        print("device used")
+        self.device_label.setText(device)
 
-            if self.proportional:
-                if label_width > 0 and label_height > 0 and image_width > 0 and image_height > 0:
-                    # Map click coordinates back to original QImage dimensions
-                    mapped_x = label_x / label_width
-                    mapped_y = label_y / label_height
-
-                    self.imageClicked.emit(mapped_x, mapped_y)
-            else:
-                if label_width > 0 and label_height > 0 and image_width > 0 and image_height > 0:
-                    # Map click coordinates back to original QImage dimensions
-                    mapped_x = int(label_x * (image_width / label_width))
-                    mapped_y = int(label_y * (image_height / label_height))
-
-                    self.imageClicked.emit(mapped_x, mapped_y)
-
-        super().mousePressEvent(event)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = RawRefineryApp()
     window.show()
+    window.loading_popup()
     sys.exit(app.exec())

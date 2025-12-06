@@ -18,10 +18,10 @@ def apply_gamma(img, gamma: float = 2.2):
     img = img.clip(0, 1)  
     return (img ** (1.0 / gamma)).clip(0, 1) 
 
-# def apply_gamma(tensor):   
-#     img_mask = tensor > 0.0031308
-#     tensor[img_mask] = (
-#         1.055 * np.pow(tensor[img_mask], 1.0 / 2.4) - 0.055
-#     )
-#     tensor[~img_mask] *= 12.92
-#     return tensor
+def apply_gamma_v2(tensor):   
+    img_mask = tensor > 0.0031308
+    tensor[img_mask] = (
+        1.055 * np.pow(tensor[img_mask], 1.0 / 2.4) - 0.055
+    )
+    tensor[~img_mask] *= 12.92
+    return tensor

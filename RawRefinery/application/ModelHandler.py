@@ -1,209 +1,352 @@
+# RawRefinery/application/ModelHandler.py
+
+import torch
+import numpy as np
+from pathlib import Path
+from platformdirs import user_data_dir
+from time import perf_counter
+import requests
+from PySide6.QtCore import QObject, Signal, Slot, QThread
+
+
 from RawHandler.RawHandler import RawHandler
 from RawRefinery.utils.viewing_utils import linear_to_srgb
-import torch
 from blended_tiling import TilingModule
-import numpy as np
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 
-from pathlib import Path
-from platformdirs import user_data_dir
-import requests
-from tqdm import tqdm
+# --- Configuration ---
+MODEL_REGISTRY = {
+    # "RGGB_v1_trace": {
+    #     "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt",
+    #     "filename": "RGGB_v1_trace.pt"
+    # },
+    "ShadowWeightedL1": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1.pt"
+    },
+    "ShadowWeightedL1_super_light_300": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1_super_light_300.pt"
+    },
+    "ShadowWeightedL1_light_v2_0": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1_light_v2_0.pt"
+    },
+    "ShadowWeightedL1_light_v4_0": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1_light_v4_0.pt"
+    },
+    "ShadowWeightedL1_light_8_6_0": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1_light_8_6_0.pt"
+    },
+    "ShadowWeightedL1_light_8_4_2_0": {
+        "url": None, # Local only example
+        "filename": "ShadowWeightedL1_light_8_4_2_0.pt"
+    }
+}
 
-from PySide6.QtCore import QObject, Signal, Slot
 
-class ModelHandler(QObject):
-    percent_done = Signal(float)
-    tiling_results = Signal(object, object)  
-    
-    def __init__(self, model_name, device, n_batches=2, colorspace = 'lin_rec2020', use_path='/Volumes/EasyStore/Downloads/ShadowWeightedL1_300.pt'):
+
+class InferenceWorker(QObject):
+    """
+    Performs heavy lifting in a background thread.
+    Does not know about UI, only knows about data.
+    """
+    finished = Signal(object, object) # img_rgb, denoised
+    progress = Signal(float)
+    error = Signal(str)
+
+    def __init__(self, model, device, rh, conditioning, dims, img_size=128, tile_overlap=0.25, batch_size=2):
         super().__init__()
-        if not use_path:
-            app_name = "RawRefinery"
-            model_url = "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt" 
+        self.model = model
+        self.device = device
+        self.rh = rh
+        self.conditioning = conditioning
+        self.dims = dims
+        self.img_size = img_size
+        self.tile_overlap = tile_overlap
+        self.batch_size = batch_size
+        self._is_cancelled = False
 
-            data_dir: Path = Path(user_data_dir(app_name))
-            model_path: Path = data_dir / model_name
+    @Slot()
+    def run(self):
+        try:
+            img, denoised_img = self._tile_process()
+            
+            # Post-process blending
+            blend_alpha = self.conditioning[1] / 100
+            final_denoised = (denoised_img * (1 - blend_alpha)) + (img * blend_alpha)
+            
+            self.finished.emit(img, final_denoised)
+            
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def _tile_process(self):
+        # Prepare Data
+        image_RGGB = self.rh.as_rggb(dims=self.dims, colorspace='lin_rec2020')
+        image_RGB = self.rh.as_rgb(dims=self.dims, demosaicing_func=demosaicing_CFA_Bayer_Malvar2004, colorspace='lin_rec2020', clip=True)
+        
+        tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
+        tensor_RGB = torch.from_numpy(image_RGB).unsqueeze(0).contiguous()
+
+        full_size = [image_RGGB.shape[1], image_RGGB.shape[2]]
+        tile_size = [self.img_size, self.img_size]
+        overlap = [self.tile_overlap, self.tile_overlap]
+
+        # Tiling Setup
+        tiling_module = TilingModule(tile_size=tile_size, tile_overlap=overlap, base_size=full_size)
+        tiling_module_rgb = TilingModule(tile_size=[s*2 for s in tile_size], tile_overlap=overlap, base_size=[s*2 for s in full_size])
+        tiling_module_rebuild = TilingModule(tile_size=[s*2 for s in tile_size], tile_overlap=overlap, base_size=[s*2 for s in full_size])
+
+        tiles = tiling_module.split_into_tiles(tensor_image).float().to(self.device)
+        tiles_rgb = tiling_module_rgb.split_into_tiles(tensor_RGB).float().to(self.device)
+        
+        batches = torch.split(tiles, self.batch_size)
+        batches_rgb = torch.split(tiles_rgb, self.batch_size)
+
+        # Conditioning Setup
+        cond_tensor = torch.as_tensor(self.conditioning, device=self.device).float().unsqueeze(0)
+        cond_tensor[:, 0] /= 6400
+        cond_tensor[:, 1] = 0
+        cond_tensor = cond_tensor[:, 0:1]
+
+        processed_batches = []
+        
+        # Determine Dtype
+        dtype_map = {'mps': torch.float16, 'cuda': torch.float16, 'cpu': torch.bfloat16}
+        autocast_dtype = dtype_map.get(self.device.type, torch.float32)
+
+        total_batches = len(batches_rgb)
+        
+        # Inference Loop
+        with torch.no_grad():
+            with torch.autocast(device_type=self.device.type, dtype=autocast_dtype):
+                for i, (batch, batch_rgb) in enumerate(zip(batches, batches_rgb)):
+                    if self._is_cancelled: return None, None
+                    
+                    B = batch.shape[0]
+                    # Expand conditioning to match batch size
+                    curr_cond = cond_tensor.expand(B, -1)
+                    
+                    output = self.model(batch_rgb, curr_cond)
+                    processed_batches.append(output.cpu())
+                    
+                    self.progress.emit((i + 1) / total_batches)
+
+        # Rebuild
+        tiles_out = torch.cat(processed_batches, dim=0)
+        stitched = tiling_module_rebuild.rebuild_with_masks(tiles_out).detach().cpu().numpy()[0]
+
+        torch.cuda.empty_cache() # if applicable
+
+        return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
 
 
-            if model_path.is_file():
-                print(f"Model weights found at: {model_path}")
-            else:
-                print(f"Model weights not found. Expected path: {model_path}")
-                download_file(model_url, model_path)
-        else:
-            model_path = use_path
-        print(model_path)
-        model = torch.jit.load(model_path, map_location='cpu')
-        self.model = model.eval().to(device)
+class ModelController(QObject):
+    """
+    Manages the LifeCycle of the Model, the RawHandler, and the Worker Thread.
+    """
+    progress_update = Signal(float)
+    preview_ready = Signal(object, object)
+    error_occurred = Signal(str)
+    model_loaded = Signal(str)
+    save_finished = Signal(str)
 
+    def __init__(self):
+        super().__init__()
+
+        self.model = None
         self.rh = None
         self.iso = 100
-        self.device = device
-        self.n_batches = n_batches
-        self.colorspace = colorspace
+        self.colorspace = 'lin_rec2020'
 
-    def controls(self):
-        controls = {
-            "ISO": {"range": [0, 65534], "default": self.iso},
-            "Grain": {"range": [0, 100], "default": 0}
+        #Manage devices
+        devices = {
+                   "cuda": torch.cuda.is_available(),
+                   "mps": torch.backends.mps.is_available(),
+                   "cpu": lambda : True
         }
-        return controls
+        self.devices = [d for d, is_available in devices.items() if is_available]
+        self.set_device(self.devices[0])
+        
+        # Thread management
+        self.worker_thread = None
+        self.worker = None
+        self.filename = None
+        self.save_cfa = None
+        self.start_time = None
 
-    def get_rh(self, path):
+    def load_rh(self, path):
+        """Loads the raw file handler"""
         self.rh = RawHandler(path, colorspace=self.colorspace)
         if 'EXIF ISOSpeedRatings' in self.rh.full_metadata:
             self.iso = int(self.rh.full_metadata['EXIF ISOSpeedRatings'].values[0])
         else:
             self.iso = 100
+        return self.iso
 
-    @Slot(list, tuple, bool)
-    def tile_entrypoint(self, params, dims, apply_gamma):
-        img_rgb, denoised = self.tile(params, dims, apply_gamma)
-        self.tiling_results.emit(img_rgb, denoised)
+    def load_model(self, model_key):
+        """Loads a model by key from the registry"""
+        if model_key not in MODEL_REGISTRY:
+            self.error_occurred.emit(f"Model {model_key} not found in registry.")
+            return
 
-    def tile(self, conditioning, dims=None, apply_gamma=False):
-        img, denoised_img = self.tile_image(self.rh, self.device, conditioning, self.model, dims=dims)
-        # img, denoised_img = tile_image_sparse(self.rh, self.device, conditioning, self.model, dims=dims)
-        denoised_img = denoised_img * (1 - conditioning[1]/100) + img * conditioning[1]/100
-        if apply_gamma:
-            img = img ** (1/2.2)
-            denoised_img = denoised_img ** (1/2.2)
-        return img, denoised_img
+        conf = MODEL_REGISTRY[model_key]
+        app_name = "RawRefinery"
+        data_dir = Path(user_data_dir(app_name))
+        model_path = data_dir / conf["filename"]
 
-    def save_dng(self, filename, conditioning, dims=None, save_cfa=False):
-            img, denoised_img = self.tile(conditioning, dims=dims)
+        # Handle Download
+        if not model_path.is_file():
+            if conf["url"]:
+                print(f"Downloading {model_key}...")
+                if not self._download_file(conf["url"], model_path):
+                    self.error_occurred.emit("Failed to download model.")
+                    return
+            else:
+                 self.error_occurred.emit(f"Model file not found at {model_path}")
+                 return
 
-            transform_matrix = np.linalg.inv(
-                 self.rh.rgb_colorspace_transform(colorspace=self.colorspace)
-                 )
+        try:
+            print(f"Loading model: {model_path}")
+            loaded = torch.jit.load(model_path, map_location='cpu')
+            self.model = loaded.eval().to(self.device)
+            self.model_loaded.emit(model_key)
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to load model: {e}")
 
-            CCM = self.rh.rgb_colorspace_transform(colorspace='XYZ')
-            CCM = np.linalg.inv(CCM)
+    def set_device(self, device):
+        self.device = torch.device(device)
+        if self.model:
+            self.model.to(self.device)
+        print(f"Using Device {self.device} from {device}")
 
-            transformed = denoised_img @ transform_matrix.T
-            uint_img = np.clip(transformed * 2**16-1, 0, 2**16-1).astype(np.uint16)
-            ccm1 = convert_color_matrix(CCM)
-            to_dng(uint_img, self.rh, filename, ccm1, save_cfa=save_cfa, convert_to_cfa=True)
+    def run_inference(self, conditioning, dims=None):
+        """Starts the worker thread"""
+        if not self.model or not self.rh:
+            self.error_occurred.emit("Model or Image not loaded.")
+            return
 
+        if self.worker_thread is not None:
+            print("Worker already running, cancelling...")
+            self.worker.cancel()
+            self.worker_thread.quit()
+            self.worker_thread.wait()
 
+        # Create Thread and Worker
+        self.worker_thread = QThread()
+        self.worker = InferenceWorker(self.model, self.device, self.rh, conditioning, dims)
+        self.worker.moveToThread(self.worker_thread)
 
-    def generate_thumbnail(self, min_preview_size=400):
-         thumbnail = self.rh.generate_thumbnail(min_preview_size=min_preview_size, clip=True)
-         thumbnail = linear_to_srgb(thumbnail)
-         return thumbnail
-
-    def tile_image(self, rh, device, conditioning, model,
-                        img_size=128, tile_overlap=0.25, batch_size=1, dims=None):
-        img_rgb = None                # safe init
-        denoised = None               # safe init
-
-        image_RGGB = rh.as_rggb(dims=dims, colorspace='lin_rec2020')
-        image_RGB = rh.as_rgb(dims=dims, demosaicing_func=demosaicing_CFA_Bayer_Malvar2004, colorspace='lin_rec2020', clip=False)
-        tensor_image = torch.from_numpy(image_RGGB).unsqueeze(0).contiguous()
-        tensor_RGB = torch.from_numpy(image_RGB).unsqueeze(0).contiguous()
-
-        full_size = [image_RGGB.shape[1], image_RGGB.shape[2]]
-        tile_size = [img_size, img_size]
-        overlap = [tile_overlap, tile_overlap]
-
-        tiling_module = TilingModule(tile_size=tile_size, tile_overlap=overlap, base_size=full_size)
-
-        tiling_module_rgb = TilingModule(tile_size=[s*2 for s in tile_size], tile_overlap=overlap, base_size=[s*2 for s in full_size])
-        tiling_module_rebuild = TilingModule(tile_size=[s*2 for s in tile_size],
-                                            tile_overlap=overlap,
-                                            base_size=[s*2 for s in full_size])
+        # Connect Signals
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.handle_result)
+        self.worker.progress.connect(self.progress_update)
+        self.worker.error.connect(self.error_occurred)
         
-        tiles = tiling_module.split_into_tiles(tensor_image).float().to(device)
-        tiles_rgb = tiling_module_rgb.split_into_tiles(tensor_RGB).float().to(device)
-        batches = torch.split(tiles, batch_size)
-        batches_rgb = torch.split(tiles_rgb, batch_size)
-        conditioning_tensor = (
-            torch.as_tensor(conditioning, device=device)
-            .float()
-            .unsqueeze(0)
-        )
-        conditioning_tensor[:, 0] /= 6400
-        conditioning_tensor[:, 1] = 0
-        conditioning_tensor = conditioning_tensor[:, 0:1]
-        processed_batches = []
+        # Clean up
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.finished.connect(self._cleanup_references)
+
+        self.worker_thread.start()
+
+    def _cleanup_references(self):
+        """
+        Called when the thread finishes. 
+        Sets the Python variables to None so we don't access dead C++ objects later.
+        """
+        self.worker_thread = None
+        self.worker = None
+
+    def save_image(self, filename, conditioning, save_cfa=False):
+        """Starts the worker thread"""
+        if not self.model or not self.rh:
+            self.error_occurred.emit("Model or Image not loaded.")
+            return
+
+        if self.worker_thread is not None:
+            print("Worker already running, cancelling...")
+            self.worker.cancel()
+            self.worker_thread.quit()
+            self.worker_thread.wait()
+
+        # Store the save information
+        self.filename = filename
+        self.save_cfa = save_cfa
+        self.start_time = perf_counter()
+
+        # Create Thread and Worker
+        self.worker_thread = QThread()
+        dims = None
+        self.worker = InferenceWorker(self.model, self.device, self.rh, conditioning, dims)
+        self.worker.moveToThread(self.worker_thread)
+
+        # Connect Signals
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.handle_full_image)
+        self.worker.progress.connect(self.progress_update)
+        self.worker.error.connect(self.error_occurred)
+        
+        # Clean up
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.finished.connect(self._cleanup_references)
+        
+        self.worker_thread.start()
 
 
-        # Set up AMP
-        if device.type == 'mps':
-            autocast_dtype = torch.float16
-        elif device.type == 'cuda':
-            autocast_dtype = torch.float16
-        else:
-            autocast_dtype = torch.bfloat16
+    def generate_thumbnail(self, size=400):
+        if not self.rh: return None
+        thumb = self.rh.generate_thumbnail(min_preview_size=size, clip=True)
+        return linear_to_srgb(thumb)
 
+    def _download_file(self, url, dest_path):
+        # (Keep your existing download logic here, simple version below)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            r = requests.get(url, stream=True)
+            r.raise_for_status()
+            with open(dest_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            return True
+        except Exception as e:
+            print(e)
+            return False
+        
+    # Slots
+    @Slot(object, object)
+    def handle_result(self, img, denoised):
+        self.preview_ready.emit(img, denoised)
 
-        total = len(batches_rgb)
-        idx = 0
-        with torch.no_grad():
-            with torch.autocast(device_type=device.type, dtype=autocast_dtype):
-                for batch, batch_rgb in zip(batches, batches_rgb):
-                    B = batch.shape[0]
-                    output = model(batch_rgb, conditioning_tensor[:B, :])
-                    processed_batches.append(output.cpu())  # move to CPU
-                    del output
-                    torch.cuda.empty_cache()
-                    idx += 1.
-                    self.percent_done.emit(idx/total)
+    @Slot(object, object)
+    def handle_full_image(self, img, denoised):
+        if not self.filename:
+            self.error_occurred.emit("Controller does not have a filename.")
+            return
+        if not self.save_cfa:
+            self.error_occurred.emit("Controller does not know if it should save image as a CFA.")
+            return 
+        
+        transform_matrix = np.linalg.inv(
+                self.rh.rgb_colorspace_transform(colorspace=self.colorspace)
+                )
 
+        CCM = self.rh.rgb_colorspace_transform(colorspace='XYZ')
+        CCM = np.linalg.inv(CCM)
 
-        tiles = torch.cat(processed_batches, dim=0)
-        stitched = (
-            tiling_module_rebuild.rebuild_with_masks(tiles)
-            .detach()
-            .cpu()
-            .numpy()[0]
-        )
-
-        # Blend based on grain mixer'
-        alpha = conditioning[1] / 100
-        stitched = (stitched * (1-alpha)) + image_RGB * alpha
-        del tiles, batches, processed_batches, conditioning_tensor
-        torch.cuda.empty_cache()
-
-        return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
-
-def download_file(url: str, dest_path: Path):
-    """Downloads a file from a URL to a destination path with a progress bar."""
-    
-    # 1. Ensure the destination directory exists
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-    print(f"Attempting to download model from: {url}")
-    print(f"Saving to: {dest_path}")
-    
-    try:
-        # Use stream=True to download large files in chunks
-        response = requests.get(url, stream=True, allow_redirects=True)
-        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
-
-        # Get the total file size from the header
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 1024 # 1 KB
-
-        with open(dest_path, 'wb') as f, tqdm(
-            desc=dest_path.name,
-            total=total_size,
-            unit='iB',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as bar:
-            for data in response.iter_content(block_size):
-                bar.update(len(data))
-                f.write(data)
-
-        print("Download complete.")
-        return True
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error during download: {e}")
-        # Clean up the partial file if it exists
-        if dest_path.is_file():
-             dest_path.unlink()
-        return False
+        transformed = denoised @ transform_matrix.T
+        uint_img = np.clip(transformed * 2**16-1, 0, 2**16-1).astype(np.uint16)
+        ccm1 = convert_color_matrix(CCM)
+        to_dng(uint_img, self.rh, self.filename, ccm1, save_cfa=self.save_cfa, convert_to_cfa=True)
+        delta_time = perf_counter() - self.start_time 
+        self.save_finished.emit(f"Done in {delta_time:.1f} seconds.")

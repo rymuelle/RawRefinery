@@ -9,7 +9,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=datas,  # <--- add here
+    datas=datas, 
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -34,5 +34,12 @@ exe = EXE(
     upx_exclude=[],
     runtime_tmpdir=None,
     name='RawRefinery',
-    console=False, 
+    console=False
+)
+
+app = BUNDLE(
+    exe,
+    name='RawRefinery.app', # This is what creates the .app bundle
+    icon='Assets/RawRefineryIcon.icns', # It's good practice to set it here too
+    bundle_name='RawRefinery'
 )

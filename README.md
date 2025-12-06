@@ -10,14 +10,14 @@ Currently in **alpha release**, RawRefinery provides a high-quality raw image de
 
 <div align="center">
   <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/Bayer_TEST_MuseeL-bluebirds-A7C_ISO65535_sha1=eb9cb3e1d80f48b93d0aabe20458870c5c1ef2fa.jpg" alt="Noisy Image" width="400"/>
-  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/Bayer_TEST_MuseeL-bluebirds-A7C_ISO65535_sha1=eb9cb3e1d80f48b93d0aabe20458870c5c1ef2fa_65534_denoised.DNG.jpg" alt="Denoised" width="400"/>
+  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples//Users/ryanmueller/Pictures/DenoisingExamples/Bayer_TEST_MuseeL-bluebirds-A7C_ISO65535_sha1=eb9cb3e1d80f48b93d0aabe20458870c5c1ef2fa_denoised_treenetdenoise.jpg" alt="Denoised" width="400"/>
 </div>
 
 ---
 
 ## Overview
 
-![RawRefinery main window](https://github.com/rymuelle/RawRefinery/blob/main/examples/RawRefinery.png)
+![RawRefinery main window](https://github.com/rymuelle/RawRefinery/blob/main/examples/RawRefinery_v1.3.0.png)
 
 RawRefinery lets you visually explore and refine your raw files through a simple, intuitive interface.
 It uses a deep learning–based denoising model designed to preserve fine image detail while removing noise, even at very high ISO values.
@@ -27,7 +27,7 @@ It uses a deep learning–based denoising model designed to preserve fine image 
 ## Installation
 
 Download the macOS build here:
-[**RawRefinery v1.1.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/tag/v1.1.0-alpha)
+[**RawRefinery v1.3.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/download/v1.3.0-alpha)
 
 Windows and Linux versions are coming soon, along with setup instructions for building from source.
 

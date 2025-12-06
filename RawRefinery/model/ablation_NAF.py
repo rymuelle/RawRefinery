@@ -314,7 +314,7 @@ model = AddPixelShuffle(model)
 
 
 # Get the model
-weight_file_path = f'../weights/NAFNet_90epochs.pt'
+weight_file_path = '../weights/NAFNet_90epochs.pt'
 device = 'mps'
 state_dict = torch.load(weight_file_path, map_location=torch.device('cpu'))
 model.load_state_dict(state_dict)

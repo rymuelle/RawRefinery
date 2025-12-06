@@ -2,7 +2,6 @@ import os
 from PIL import Image
 from torch.utils.data import Dataset
 import torch
-from torchvision.transforms import ToTensor
 import random
 import numpy as np
 import kagglehub

@@ -44,7 +44,6 @@ class RawRefineryApp(QMainWindow):
             <h3>Alpha Release Notice</h3>
             <p>This software is currently in Alpha. Please note:</p>
             <ul>
-                <li>It may crash unexpectedly.</li>
                 <li>Expect memory usage up to <b>3 GB</b>.</li>
                 <li>CPU processing is slow. Use <b>MPS</b> or <b>CUDA</b> for best results.</li>
             </ul>

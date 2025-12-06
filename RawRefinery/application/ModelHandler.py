@@ -1,5 +1,3 @@
-# RawRefinery/application/ModelHandler.py
-
 import torch
 import numpy as np
 from pathlib import Path
@@ -14,19 +12,21 @@ from blended_tiling import TilingModule
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 
-# --- Configuration ---
 MODEL_REGISTRY = {
     "Tree Net Denoise": {
         "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1.pt",
         "filename": "ShadowWeightedL1.pt"
     },
     "Tree Net Denoise Light": {
+        "url": "    https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_light.pt",
+        "filename": "ShadowWeightedL1_light.pt"
+    },
+    "Tree Net Denoise Super Light": {
         "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_super_light.pt",
         "filename": "ShadowWeightedL1_super_light.pt"
     },
+
 }
-
-
 
 class InferenceWorker(QObject):
     """
@@ -48,20 +48,6 @@ class InferenceWorker(QObject):
         self.tile_overlap = tile_overlap
         self.batch_size = batch_size
         self._is_cancelled = False
-
-    @Slot()
-    def run(self):
-        try:
-            img, denoised_img = self._tile_process()
-            
-            # Post-process blending
-            blend_alpha = self.conditioning[1] / 100
-            final_denoised = (denoised_img * (1 - blend_alpha)) + (img * blend_alpha)
-            
-            self.finished.emit(img, final_denoised)
-            
-        except Exception as e:
-            self.error.emit(str(e))
 
     def cancel(self):
         self._is_cancelled = True
@@ -122,10 +108,23 @@ class InferenceWorker(QObject):
         tiles_out = torch.cat(processed_batches, dim=0)
         stitched = tiling_module_rebuild.rebuild_with_masks(tiles_out).detach().cpu().numpy()[0]
 
-        torch.cuda.empty_cache() # if applicable
+        torch.cuda.empty_cache()
 
         return image_RGB.transpose(1, 2, 0), stitched.transpose(1, 2, 0)
-
+    
+    @Slot()
+    def run(self):
+        try:
+            img, denoised_img = self._tile_process()
+            
+            # Post-process blending
+            blend_alpha = self.conditioning[1] / 100
+            final_denoised = (denoised_img * (1 - blend_alpha)) + (img * blend_alpha)
+            
+            self.finished.emit(img, final_denoised)
+            
+        except Exception as e:
+            self.error.emit(str(e))
 
 class ModelController(QObject):
     """
@@ -145,7 +144,7 @@ class ModelController(QObject):
         self.iso = 100
         self.colorspace = 'lin_rec2020'
 
-        #Manage devices
+        # Manage devices
         devices = {
                    "cuda": torch.cuda.is_available(),
                    "mps": torch.backends.mps.is_available(),
@@ -289,7 +288,6 @@ class ModelController(QObject):
         return thumb
 
     def _download_file(self, url, dest_path):
-        # (Keep your existing download logic here, simple version below)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             r = requests.get(url, stream=True)

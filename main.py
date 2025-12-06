@@ -22,7 +22,7 @@ class RawRefineryApp(QMainWindow):
         self.setWindowTitle("Raw Refinery")
         self.resize(1000, 700)
 
-        # --- Logic Controller ---
+        #  Logic Controller
         self.controller = ModelController()
         
         # Connect Signals
@@ -57,7 +57,8 @@ class RawRefineryApp(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.main_layout = QHBoxLayout(self.central_widget)
 
-        # --- Left Panel ---
+        
+        ## Left Panel 
         self.left_panel = QWidget()
         self.left_layout = QVBoxLayout(self.left_panel)
         
@@ -71,7 +72,7 @@ class RawRefineryApp(QMainWindow):
         self.left_layout.addWidget(self.file_list)
         self.main_layout.addWidget(self.left_panel, 1)
 
-        # --- Right Panel ---
+        ## Right Panel 
         self.right_panel = QWidget()
         self.right_layout = QVBoxLayout(self.right_panel)
 
@@ -90,7 +91,7 @@ class RawRefineryApp(QMainWindow):
         self.preview_layout.addWidget(self.preview_label)
         self.right_layout.addWidget(self.preview_container)
 
-        # Controls
+        ## Controls
         self.controls_layout = QFormLayout()
         
         # Model Selector
@@ -153,10 +154,10 @@ class RawRefineryApp(QMainWindow):
         self.right_layout.addWidget(self.progress_bar)
         self.right_layout.addWidget(self.status_label)
 
-        #Add Right Panel
+        # Add Right Panel
         self.main_layout.addWidget(self.right_panel, 2)
         
-        # State
+        ## State
         self.dims = None
         self.current_folder = None
         self.current_file_path = None
@@ -194,8 +195,6 @@ class RawRefineryApp(QMainWindow):
             qimg = numpy_to_qimage_rgb(thumb_rgb, exposure=self.exposure_slider.get_natural_value())
             self.thumb_label.set_image(qimg)
             
-            # Reset default dims to center
-            # (You can calculate center here based on rh.raw.shape)
             self.dims = None 
             self.preview_label.setText("Click thumbnail to preview region")
             
@@ -277,7 +276,7 @@ class RawRefineryApp(QMainWindow):
         except Exception as e:
             self.show_error(f"Failed to save patch: {e}")
 
-    # --- Slots ---
+    # Slots 
     @Slot(float)
     def update_progress(self, val):
         self.progress_bar.setValue(int(val * 100))

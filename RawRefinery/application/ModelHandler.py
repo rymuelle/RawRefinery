@@ -16,34 +16,14 @@ from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 
 # --- Configuration ---
 MODEL_REGISTRY = {
-    # "RGGB_v1_trace": {
-    #     "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.0.0-alpha/RGGB_v1_trace.pt",
-    #     "filename": "RGGB_v1_trace.pt"
-    # },
-    "ShadowWeightedL1": {
-        "url": None, # Local only example
+    "Tree Net Denoise": {
+        "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1.pt",
         "filename": "ShadowWeightedL1.pt"
     },
-    "ShadowWeightedL1_super_light_300": {
-        "url": None, # Local only example
-        "filename": "ShadowWeightedL1_super_light_300.pt"
+    "Tree Net Denoise Light": {
+        "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_super_light.pt",
+        "filename": "ShadowWeightedL1_super_light.pt"
     },
-    "ShadowWeightedL1_light_v2_0": {
-        "url": None, # Local only example
-        "filename": "ShadowWeightedL1_light_v2_0.pt"
-    },
-    "ShadowWeightedL1_light_v4_0": {
-        "url": None, # Local only example
-        "filename": "ShadowWeightedL1_light_v4_0.pt"
-    },
-    "ShadowWeightedL1_light_8_6_0": {
-        "url": None, # Local only example
-        "filename": "ShadowWeightedL1_light_8_6_0.pt"
-    },
-    "ShadowWeightedL1_light_8_4_2_0": {
-        "url": None, # Local only example
-        "filename": "ShadowWeightedL1_light_8_4_2_0.pt"
-    }
 }
 
 

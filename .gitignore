@@ -5,6 +5,7 @@
 *.dmg
 *.zip
 *.pkg
+*_private_key.pem
 
 *egg-info/*
 .DS_Store

@@ -8,14 +8,14 @@ Currently in **alpha release**, RawRefinery provides a high-quality raw image de
 
 ### Example: Denoising Performance
 
-Before and after image denoising + deblurring performance for an ISO 102400(!) photo taken with an A7RII. This image is not included in any training set, and represents real world performance. 
+Before and after image denoising + deblurring performance for an ISO 102400(!) photo taken with an A7RII. This image is not included in any training set, and represents real world performance. Click for to see larger versions. 
 
 <div align="center">
   <a href="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg">
-    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" width="400" />
+    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" width="600" />
   </a>
   <a href="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg">
-    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" width="400" />
+    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" width="600" />
   </a>
 </div>
 

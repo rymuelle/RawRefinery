@@ -9,8 +9,8 @@ Currently in **alpha release**, RawRefinery provides a high-quality raw image de
 ### Example: Denoising Performance
 
 <div align="center">
-  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" alt="Noisy Image" width="400"/>
-  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" alt="Denoised" width="400"/>
+  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" alt="Noisy Image"/>
+  <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" alt="Denoised"/>
 </div>
 
 ---

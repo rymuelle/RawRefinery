@@ -25,8 +25,166 @@ MODEL_REGISTRY = {
         "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_super_light.pt",
         "filename": "ShadowWeightedL1_super_light.pt"
     },
+    # # "Tree Net Deblur": {
+    # #     "url": None,
+    # #     "filename": "Deblur_v1_0.pt"
+    # # },
 
+    # # "Tree Net Deblur 200": {
+    # #     "url": None,
+    # #     "filename": "Deblur_v1_200.pt"
+    # # },
+
+    # # "Tree Net Deblur 300": {
+    # #     "url": None,
+    # #     "filename": "Deblur_v1_300.pt"
+    # # },
+
+    # # "Tree Net Deblur 400": {
+    # #     "url": None,
+    # #     "filename": "Deblur_v1_400.pt"
+    # # },
+
+    # # "Tree Net Deblur 500": {
+    # #     "url": None,
+    # #     "filename": "Deblur_v1_500.pt"
+    # # },
+
+    # "ShadowWeightedL1_24_deep_500.pt": {
+    #     "url": None,
+    #     "filename": "ShadowWeightedL1_24_deep_500.pt"
+    # },
+
+    # # "Tree Net Deblur deep": {
+    # #     "url": None,
+    # #     "filename": "Deblur_deep_0.pt"
+    # # },
+
+    
+    # # "Tree Net Deblur deep 24": {
+    # #     "url": None,
+    # #     "filename": "Deblur_deep_500.pt"
+    # # },
+
+    # "Tree Net Deblur deep 24 final": {
+    #     "url": None,
+    #     "filename": "Deblur_deep_24.pt",
+    #     "affine": True,
+    # },
+
+    # # "Tree Net Linear Deblur 100": {
+    # #     "url": None,
+    # #     "filename": "Linear_Deblur_100.pt"
+    # # },
+    # # "Tree Net Linear Deblur 200": {
+    # #     "url": None,
+    # #     "filename": "Linear_Deblur_200.pt"
+    # # },
+    # "Real Blur 24": {
+    #     "url": None,
+    #     "filename": "realblur_trace.pt",
+    #     # "affine": True,
+    # },
+    # "realblur_gamma": {
+    #     "url": None,
+    #     "filename": "realblur_gamma.pt",
+    #     # "affine": True,
+    # },
+    # "realblur_gamma_color_jitter": {
+    #     "url": None,
+    #     "filename": "trace.pt",
+    #     # "affine": True,
+    # },
+    
+    # "deblur_with_noise_100": {
+    #     "url": None,
+    #     "filename": "deblur_with_noise_100.pt"
+    # },
+
+    # "deblur_with_noise": {
+    #     "url": None,
+    #     "filename": "deblur_with_noise.pt"
+    # },
+
+    # "conditioned_gaussian_200": {
+    #     "url": None,
+    #     "filename": "conditioned_gaussian_200.pt",
+    #     "affine": True,
+    # },
+    # "realblur_gamma_140": {
+    #     "url": None,
+    #     "filename": "realblur_gamma_140.pt"
+    # },
+    # "conditioned_gaussian_lpips": {
+    #     "url": None,
+    #     "filename": "conditioned_gaussian_lpips.pt",
+    #     "affine": True,
+    # },    
+    
+    # "small_conditioned_gauss": {
+    #     "url": None,
+    #     "filename": "small_conditioned_gauss.pt",
+    #     "affine": True,
+    # },   
 }
+
+
+def match_colors_linear(
+    src: torch.Tensor, 
+    tgt: torch.Tensor, 
+    sample_fraction: float = 0.05
+):
+    """
+    Fit per-channel affine color transforms:
+        tgt ≈ scale * src + bias
+
+    Args:
+        src: [B, C, H, W] source tensor
+        tgt: [B, C, H, W] target tensor
+        sample_fraction: fraction of pixels to use for fitting
+
+    Returns:
+        transformed_src: source after color matching
+        scale: [B, C]
+        bias:  [B, C]
+    """
+
+    B, C, H, W = src.shape
+    device = src.device
+
+    # Flatten spatial dims
+    src_flat = src.view(B, C, -1)
+    tgt_flat = tgt.view(B, C, -1)
+
+    # Sample subset of pixels
+    N = src_flat.shape[-1]
+    k = max(64, int(N * sample_fraction))
+
+    idx = torch.randint(0, N, (k,), device=device)
+
+    src_s = src_flat[..., idx]  # [B, C, k]
+    tgt_s = tgt_flat[..., idx]
+
+    # Compute scale and bias using least squares
+    # scale = cov(src, tgt) / var(src)
+    src_mean = src_s.mean(-1, keepdim=True)
+    tgt_mean = tgt_s.mean(-1, keepdim=True)
+
+    src_centered = src_s - src_mean
+    tgt_centered = tgt_s - tgt_mean
+
+    var_src = (src_centered ** 2).mean(-1)
+    cov = (src_centered * tgt_centered).mean(-1)
+
+    scale = cov / (var_src + 1e-8)            # [B, C]
+    bias = tgt_mean.squeeze(-1) - scale * src_mean.squeeze(-1)
+
+    # Apply correction
+    scale_ = scale.view(B, C, 1, 1)
+    bias_ = bias.view(B, C, 1, 1)
+    transformed = src * scale_ + bias_
+
+    return transformed, scale, bias
 
 class InferenceWorker(QObject):
     """
@@ -37,9 +195,10 @@ class InferenceWorker(QObject):
     progress = Signal(float)
     error = Signal(str)
 
-    def __init__(self, model, device, rh, conditioning, dims, img_size=128, tile_overlap=0.25, batch_size=2):
+    def __init__(self, model, model_params, device, rh, conditioning, dims, img_size=128, tile_overlap=0.25, batch_size=2):
         super().__init__()
         self.model = model
+        self.model_params = model_params
         self.device = device
         self.rh = rh
         self.conditioning = conditioning
@@ -100,6 +259,10 @@ class InferenceWorker(QObject):
                     curr_cond = cond_tensor.expand(B, -1)
                     
                     output = self.model(batch_rgb, curr_cond)
+
+                    # Output processing
+                    if "affine" in self.model_params:
+                        output, _, _ = match_colors_linear(output, batch_rgb)
                     processed_batches.append(output.cpu())
                     
                     self.progress.emit((i + 1) / total_batches)
@@ -159,6 +322,7 @@ class ModelController(QObject):
         self.filename = None
         self.save_cfa = None
         self.start_time = None
+        self.model_params = {}
 
     def load_rh(self, path):
         """Loads the raw file handler"""
@@ -176,6 +340,7 @@ class ModelController(QObject):
             return
 
         conf = MODEL_REGISTRY[model_key]
+        self.model_params = conf
         app_name = "RawRefinery"
         data_dir = Path(user_data_dir(app_name))
         model_path = data_dir / conf["filename"]
@@ -193,6 +358,9 @@ class ModelController(QObject):
 
         try:
             print(f"Loading model: {model_path}")
+            # Verify model before load
+            self._verify_model(model_path, model_path.with_suffix(f'{model_path.suffix}.sig'), corrupt_file=False)
+            
             loaded = torch.jit.load(model_path, map_location='cpu')
             self.model = loaded.eval().to(self.device)
             self.model_loaded.emit(model_key)
@@ -219,7 +387,7 @@ class ModelController(QObject):
 
         # Create Thread and Worker
         self.worker_thread = QThread()
-        self.worker = InferenceWorker(self.model, self.device, self.rh, conditioning, dims)
+        self.worker = InferenceWorker(self.model, self.model_params, self.device, self.rh, conditioning, dims)
         self.worker.moveToThread(self.worker_thread)
 
         # Connect Signals
@@ -264,7 +432,7 @@ class ModelController(QObject):
         # Create Thread and Worker
         self.worker_thread = QThread()
         dims = None
-        self.worker = InferenceWorker(self.model, self.device, self.rh, conditioning, dims)
+        self.worker = InferenceWorker(self.model, self.model_params, self.device, self.rh, conditioning, dims)
         self.worker.moveToThread(self.worker_thread)
 
         # Connect Signals
@@ -287,6 +455,46 @@ class ModelController(QObject):
         thumb = self.rh.generate_thumbnail(min_preview_size=size, clip=True)
         return thumb
 
+    def _verify_model(self, dest_path, sig_path, corrupt_file=False):
+        # Public key for verifying model
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from pathlib import Path
+
+        PUBLIC_KEY_PATH = Path(__file__).parent.parent / "verify/model_signing_public_key.pem"
+        pub = serialization.load_pem_public_key(
+            open(PUBLIC_KEY_PATH, "rb").read()
+        )
+
+        try:
+            # Corrupt file to test failure
+            if corrupt_file:
+                with open(dest_path, "ab") as f:
+                    f.write(b"\x00") 
+
+            data = Path(dest_path).read_bytes()
+            signature = Path(sig_path).read_bytes()
+            pub.verify(
+                signature,
+                data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256(),
+            )
+            print(f"Model {dest_path} verified!")
+            return True
+        except Exception as e:
+            print(e)
+            if dest_path.exists():
+                dest_path.unlink()
+            if sig_path.exists():
+                sig_path.unlink()
+            print(f"Model {dest_path} not verified! Deleting.")
+            return False
+
+
     def _download_file(self, url, dest_path):
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -295,7 +503,17 @@ class ModelController(QObject):
             with open(dest_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-            return True
+
+            # Download model signature
+            r = requests.get(url + '.sig', stream=True)
+            r.raise_for_status()
+            sig_path = dest_path.with_suffix(f'{dest_path.suffix}.sig')
+            with open(sig_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print("test verification")
+            return self._verify_model(dest_path, sig_path, corrupt_file=False)
+        
         except Exception as e:
             print(e)
             return False

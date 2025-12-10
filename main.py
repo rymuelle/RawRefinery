@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QListWidget, QLabel, QSlider, QSpinBox, 
     QHBoxLayout, QFormLayout, QComboBox, QProgressBar, QMessageBox
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt, Slot
 
 # Import utils
@@ -57,7 +57,6 @@ class RawRefineryApp(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.main_layout = QHBoxLayout(self.central_widget)
 
-        
         ## Left Panel 
         self.left_panel = QWidget()
         self.left_layout = QVBoxLayout(self.left_panel)
@@ -312,9 +311,22 @@ class RawRefineryApp(QMainWindow):
         print("device used")
         self.device_label.setText(device)
 
-
+import platform
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    if platform.system() == "Darwin":  # Darwin is the kernel for macOS
+        # Set a unique Bundle ID. This is often necessary for macOS to recognize
+        # the process as a distinct application for Dock/Menu Bar purposes.
+        app.setApplicationDisplayName("Raw Refinery")
+        app.setOrganizationName("Your Company Name")
+        
+        # CRITICAL: Setting the Bundle ID
+        # Use your reverse domain name here (e.g., com.yourcompany.appname)
+        app.setDesktopFileName("com.rawrefinery.app") 
+        
+        # You can also use QApplication.setAttribute() for more control, 
+        # but the above settings should handle identification.
+
     window = RawRefineryApp()
     window.show()
     window.loading_popup()

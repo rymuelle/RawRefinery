@@ -13,8 +13,9 @@ Currently in **alpha release**, RawRefinery provides a high-quality raw image de
   <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" alt="Denoised"/>
 </div>
 
-![comparison video](https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_comparison.mp4)
-
+<video controls width="600">
+  <source src="[examples/comparison.mp4](https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_comparison.mp4)" type="video/mp4">
+</video>
 ---
 
 ## Overview

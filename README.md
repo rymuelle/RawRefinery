@@ -12,10 +12,10 @@ Before and after image denoising + deblurring performance for an ISO 102400(!) p
 
 <div align="center">
   <a href="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg">
-    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" width="500" />
+    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k.jpg" width="400" />
   </a>
   <a href="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg">
-    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" width="500" />
+    <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" width="400" />
   </a>
 </div>
 

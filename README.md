@@ -13,9 +13,14 @@ Currently in **alpha release**, RawRefinery provides a high-quality raw image de
   <img src="https://github.com/rymuelle/RawRefinery/blob/main/examples/brushes_4k_denoised.jpg" alt="Denoised"/>
 </div>
 
+
+https://github.com/user-attachments/assets/0f7c638f-d340-4efb-b204-2641b9b8c0b2
+
+
 ---
 
 ## Overview
+
 
 ![RawRefinery main window](https://github.com/rymuelle/RawRefinery/blob/main/examples/RawRefinery_v1.3.0.png)
 

@@ -6,7 +6,7 @@ authors = [
     { name = "Ryan Mueller"},
 ]
 readme = "README.md"
-requires-python = "==3.13.7" 
+requires-python = ">=3.8" 
 license = { file = "LICENSE" }
 keywords = ["python", "Machine Learning", "Camera Raw"]
 classifiers = [
@@ -15,16 +15,17 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "pidng ==4.0.9",
-    "pyside6 ==6.9.3",
-    "numpy ==2.3.3",
-    "torch ==2.8.0",
-    "RawHandler ==0.0.2",
-    "colour_demosaicing ==0.2.6",
-    "blended_tiling ==0.0.1.dev7",
-    "requests ==2.32.5",
-    "platformdirs ==4.5.0",
-    "tqdm ==4.67.1",
+    "pidng ~=4.0.9",
+    "pyside6 ~=6.9",
+    "numpy >=2.3", 
+    "torch ~=2.8",
+    "RawHandler ~=0.0.2",
+    "colour_demosaicing ~=0.2.6",
+    "blended_tiling >=0.0.1.dev7",
+    "requests ~=2.32",
+    "platformdirs ~=4.5",
+    "tqdm ~=4.67",
+    "cryptography ~=46.0",
 ]
 
 [project.urls]

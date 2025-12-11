@@ -6,7 +6,7 @@ authors = [
     { name = "Ryan Mueller"},
 ]
 readme = "README.md"
-requires-python = ">=3.8" 
+requires-python = ">=3.11" 
 license = { file = "LICENSE" }
 keywords = ["python", "Machine Learning", "Camera Raw"]
 classifiers = [

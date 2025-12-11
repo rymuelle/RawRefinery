@@ -5,12 +5,14 @@ from platformdirs import user_data_dir
 from time import perf_counter
 import requests
 from PySide6.QtCore import QObject, Signal, Slot, QThread
-
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from RawHandler.RawHandler import RawHandler
 from blended_tiling import TilingModule
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
+from RawRefinery.application.postprocessing import match_colors_linear
 
 MODEL_REGISTRY = {
     "Tree Net Denoise": {
@@ -25,97 +27,18 @@ MODEL_REGISTRY = {
         "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_super_light.pt",
         "filename": "ShadowWeightedL1_super_light.pt"
     },
-    # # "Tree Net Deblur": {
-    # #     "url": None,
-    # #     "filename": "Deblur_v1_0.pt"
-    # # },
 
-    # # "Tree Net Deblur 200": {
-    # #     "url": None,
-    # #     "filename": "Deblur_v1_200.pt"
-    # # },
+    "Tree Net Denoise Heavy": {
+        "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/ShadowWeightedL1_24_deep_500.pt",
+        "filename": "ShadowWeightedL1_24_deep_500.pt"
+    },
 
-    # # "Tree Net Deblur 300": {
-    # #     "url": None,
-    # #     "filename": "Deblur_v1_300.pt"
-    # # },
-
-    # # "Tree Net Deblur 400": {
-    # #     "url": None,
-    # #     "filename": "Deblur_v1_400.pt"
-    # # },
-
-    # # "Tree Net Deblur 500": {
-    # #     "url": None,
-    # #     "filename": "Deblur_v1_500.pt"
-    # # },
-
-    # "ShadowWeightedL1_24_deep_500.pt": {
-    #     "url": None,
-    #     "filename": "ShadowWeightedL1_24_deep_500.pt"
-    # },
-
-    # # "Tree Net Deblur deep": {
-    # #     "url": None,
-    # #     "filename": "Deblur_deep_0.pt"
-    # # },
-
-    
-    # # "Tree Net Deblur deep 24": {
-    # #     "url": None,
-    # #     "filename": "Deblur_deep_500.pt"
-    # # },
-
-    # "Tree Net Deblur deep 24 final": {
-    #     "url": None,
-    #     "filename": "Deblur_deep_24.pt",
-    #     "affine": True,
-    # },
-
-    # # "Tree Net Linear Deblur 100": {
-    # #     "url": None,
-    # #     "filename": "Linear_Deblur_100.pt"
-    # # },
-    # # "Tree Net Linear Deblur 200": {
-    # #     "url": None,
-    # #     "filename": "Linear_Deblur_200.pt"
-    # # },
-    # "Real Blur 24": {
-    #     "url": None,
-    #     "filename": "realblur_trace.pt",
-    #     # "affine": True,
-    # },
-    # "realblur_gamma": {
-    #     "url": None,
-    #     "filename": "realblur_gamma.pt",
-    #     # "affine": True,
-    # },
-    # "realblur_gamma_color_jitter": {
-    #     "url": None,
-    #     "filename": "trace.pt",
-    #     # "affine": True,
-    # },
-    
-    # "deblur_with_noise_100": {
-    #     "url": None,
-    #     "filename": "deblur_with_noise_100.pt"
-    # },
-
-    # "deblur_with_noise": {
-    #     "url": None,
-    #     "filename": "deblur_with_noise.pt"
-    # },
-
-    # "conditioned_gaussian_200": {
-    #     "url": None,
-    #     "filename": "conditioned_gaussian_200.pt",
-    #     "affine": True,
-    # },
-    # "realblur_gamma_140": {
-    #     "url": None,
-    #     "filename": "realblur_gamma_140.pt"
-    # },
-    # "conditioned_gaussian_lpips": {
+    "Deblur": {
+        "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/realblur_gamma_140.pt",
+        "filename": "realblur_gamma_140.pt",
+        "affine": True,
+    },
+    # "DeGaussianBlur": {
     #     "url": None,
     #     "filename": "conditioned_gaussian_lpips.pt",
     #     "affine": True,
@@ -126,65 +49,14 @@ MODEL_REGISTRY = {
     #     "filename": "small_conditioned_gauss.pt",
     #     "affine": True,
     # },   
+
+    "DeepSharpen": {
+        "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/Deblur_deep_24.pt",
+        "filename": "Deblur_deep_24.pt",
+        "affine": True,
+    },
 }
 
-
-def match_colors_linear(
-    src: torch.Tensor, 
-    tgt: torch.Tensor, 
-    sample_fraction: float = 0.05
-):
-    """
-    Fit per-channel affine color transforms:
-        tgt ≈ scale * src + bias
-
-    Args:
-        src: [B, C, H, W] source tensor
-        tgt: [B, C, H, W] target tensor
-        sample_fraction: fraction of pixels to use for fitting
-
-    Returns:
-        transformed_src: source after color matching
-        scale: [B, C]
-        bias:  [B, C]
-    """
-
-    B, C, H, W = src.shape
-    device = src.device
-
-    # Flatten spatial dims
-    src_flat = src.view(B, C, -1)
-    tgt_flat = tgt.view(B, C, -1)
-
-    # Sample subset of pixels
-    N = src_flat.shape[-1]
-    k = max(64, int(N * sample_fraction))
-
-    idx = torch.randint(0, N, (k,), device=device)
-
-    src_s = src_flat[..., idx]  # [B, C, k]
-    tgt_s = tgt_flat[..., idx]
-
-    # Compute scale and bias using least squares
-    # scale = cov(src, tgt) / var(src)
-    src_mean = src_s.mean(-1, keepdim=True)
-    tgt_mean = tgt_s.mean(-1, keepdim=True)
-
-    src_centered = src_s - src_mean
-    tgt_centered = tgt_s - tgt_mean
-
-    var_src = (src_centered ** 2).mean(-1)
-    cov = (src_centered * tgt_centered).mean(-1)
-
-    scale = cov / (var_src + 1e-8)            # [B, C]
-    bias = tgt_mean.squeeze(-1) - scale * src_mean.squeeze(-1)
-
-    # Apply correction
-    scale_ = scale.view(B, C, 1, 1)
-    bias_ = bias.view(B, C, 1, 1)
-    transformed = src * scale_ + bias_
-
-    return transformed, scale, bias
 
 class InferenceWorker(QObject):
     """
@@ -324,6 +196,11 @@ class ModelController(QObject):
         self.start_time = None
         self.model_params = {}
 
+        PUBLIC_KEY_PATH = Path(__file__).parent.parent / "verify/model_signing_public_key.pem"
+        self.pub = serialization.load_pem_public_key(
+            open(PUBLIC_KEY_PATH, "rb").read()
+        )
+
     def load_rh(self, path):
         """Loads the raw file handler"""
         self.rh = RawHandler(path, colorspace=self.colorspace)
@@ -359,7 +236,7 @@ class ModelController(QObject):
         try:
             print(f"Loading model: {model_path}")
             # Verify model before load
-            self._verify_model(model_path, model_path.with_suffix(f'{model_path.suffix}.sig'), corrupt_file=False)
+            self._verify_model(model_path, model_path.with_suffix(f'{model_path.suffix}.sig'))
             
             loaded = torch.jit.load(model_path, map_location='cpu')
             self.model = loaded.eval().to(self.device)
@@ -455,26 +332,11 @@ class ModelController(QObject):
         thumb = self.rh.generate_thumbnail(min_preview_size=size, clip=True)
         return thumb
 
-    def _verify_model(self, dest_path, sig_path, corrupt_file=False):
-        # Public key for verifying model
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from pathlib import Path
-
-        PUBLIC_KEY_PATH = Path(__file__).parent.parent / "verify/model_signing_public_key.pem"
-        pub = serialization.load_pem_public_key(
-            open(PUBLIC_KEY_PATH, "rb").read()
-        )
-
+    def _verify_model(self, dest_path, sig_path):
         try:
-            # Corrupt file to test failure
-            if corrupt_file:
-                with open(dest_path, "ab") as f:
-                    f.write(b"\x00") 
-
             data = Path(dest_path).read_bytes()
             signature = Path(sig_path).read_bytes()
-            pub.verify(
+            self.pub.verify(
                 signature,
                 data,
                 padding.PSS(
@@ -512,7 +374,7 @@ class ModelController(QObject):
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
             print("test verification")
-            return self._verify_model(dest_path, sig_path, corrupt_file=False)
+            return self._verify_model(dest_path, sig_path)
         
         except Exception as e:
             print(e)

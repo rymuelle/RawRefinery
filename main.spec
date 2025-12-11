@@ -39,7 +39,13 @@ exe = EXE(
 
 app = BUNDLE(
     exe,
-    name='RawRefinery.app', # This is what creates the .app bundle
-    icon='Assets/RawRefineryIcon.icns', # It's good practice to set it here too
+    icon='Assets/RawRefineryIcon.icns', 
+    info_plist={
+        'CFBundleName': 'RawRefinery',
+        'CFBundleDisplayName': 'RawRefinery',
+        'CFBundleExecutable': 'RawRefinery',
+        'LSUIElement': False, 
+    },
+    name='RawRefinery.app', 
     bundle_name='RawRefinery'
 )

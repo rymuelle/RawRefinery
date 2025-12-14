@@ -40,4 +40,4 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 
 [project.scripts]
-rawrefinery = "rawrefinery.main:main"
+rawrefinery = "RawRefinery.main:main"

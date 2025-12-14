@@ -35,7 +35,13 @@ It uses a deep learning–based denoising model designed to preserve fine image 
 
 ### Build from source from git (linux):
 
-### Download prebuilt installer (Mac OS Only, Windows and Linux executables coming soon)
+https://github.com/rymuelle/RawRefinery/tree/main/linux
+
+### Build from source from git (MacOS):
+
+Pending
+
+### Download installer
 
 Download the macOS build here:
 [**RawRefinery v1.3.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/download/v1.3.0-alpha)

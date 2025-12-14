@@ -129,17 +129,18 @@ def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True, convert_to_cfa=True, use
 
     t.set(Tag.TileWidth, width)
     t.set(Tag.TileLength, height)
-    t.set(Tag.Orientation, rh.full_metadata['Image Orientation'].values[0])
 
     t.set(Tag.ColorMatrix1, ccm1)
     t.set(Tag.CalibrationIlluminant1, CalibrationIlluminant.D65)
     wb = get_as_shot_neutral(rh)
     t.set(Tag.AsShotNeutral, wb)
     t.set(Tag.BaselineExposure, [[0,100]])
-    t.set(Tag.Make, rh.full_metadata['Image Make'].values)
-    t.set(Tag.Model, rh.full_metadata['Image Model'].values)
+
 
     try:
+      t.set(Tag.Make, rh.full_metadata['Image Make'].values)
+      t.set(Tag.Model, rh.full_metadata['Image Model'].values)
+      t.set(Tag.Orientation, rh.full_metadata['Image Orientation'].values[0])
       exposures = get_ratios('EXIF ExposureTime', rh)
       fnumber = get_ratios('EXIF FNumber', rh)
       ExposureBiasValue = get_ratios('EXIF ExposureBiasValue', rh) 

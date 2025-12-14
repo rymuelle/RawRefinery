@@ -53,7 +53,7 @@ pyinstaller main.spec
 
 #Then, we build the .deb with fpm
 sudo apt update
-sudo apt install ruby ruby-dev build-essential spice-vdagent qemu-guest-agent upx-ucl
+sudo apt install ruby ruby-dev build-essential qemu-guest-agent upx-ucl
 sudo gem install --no-document fpm
 
 # Set up staging area

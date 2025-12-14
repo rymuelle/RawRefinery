@@ -6,7 +6,7 @@ datas = [
 ]
 
 a = Analysis(
-    ['main.py'],
+    ['RawRefinery/main.py'],
     pathex=[],
     binaries=[],
     datas=datas, 

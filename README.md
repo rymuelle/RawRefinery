@@ -61,7 +61,7 @@ However, if you wish to build an installable applicaiton, you may use pyinstalle
 python3 -m pip install pyinstaller
 # Clean up previous builds 
 rm -rf build dist __pycache__ 
-pyinstaller linux.spec
+pyinstaller linux/main.spec
 ```
 
 

@@ -50,6 +50,26 @@ MODEL_REGISTRY = {
     #     "affine": True,
     # },   
 
+    "real_blur_kernel_deeper_500": {
+        "url": None,
+        "filename": "real_blur_kernel_deeper_500.pt",
+        "affine": True,
+    },  
+    "real_blur_kernel_real_noise_100.pt": {
+        "url": None,
+        "filename": "real_blur_kernel_real_noise_100.pt",
+        "affine": True,
+    },  
+    "real_blur_kernel_real_noise_300.pt": {
+        "url": None,
+        "filename": "real_blur_kernel_real_noise_300.pt",
+        "affine": True,
+    },  
+    "real_blur_kernel_no_noise_100.pt": {
+        "url": None,
+        "filename": "real_blur_kernel_no_noise_100.pt",
+        "affine": True,
+    },  
     "DeepSharpen": {
         "url": "https://github.com/rymuelle/RawRefinery/releases/download/v1.2.1-alpha/Deblur_deep_24.pt",
         "filename": "Deblur_deep_24.pt",
@@ -196,10 +216,24 @@ class ModelController(QObject):
         self.start_time = None
         self.model_params = {}
 
-        PUBLIC_KEY_PATH = Path(__file__).parent.parent / "verify/model_signing_public_key.pem"
-        self.pub = serialization.load_pem_public_key(
-            open(PUBLIC_KEY_PATH, "rb").read()
-        )
+        # PUBLIC_KEY_PATH = Path(__file__).parent / "verify/model_signing_public_key.pem"
+        # self.pub = serialization.load_pem_public_key(
+        #     open(PUBLIC_KEY_PATH, "rb").read()
+        # )
+        self.pub = '''-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA8iRGMPqFIFVF0TM/AbMI
+DJUqdjY1S7dGn6rYjLixnhohHLKIo2ZhFUfPaeYrDoqJblP9MxbBLm6a782/Us0A
+vblTQOsdVFHOlVEiDUkG9CJrzh7arqJF+v2LLP9qPIcL5QdIHM+BCKlbNPBU/TJB
+49b6a+1FfKCEeY1z9F8H6GCHGeRB43lz5/1yMoBnq//Rc7NrvinwlNcFYHHM1oj6
+Hk6KPkgitya11QgTTva+XimR7cbw7h9/vJKbrS7tValApio3Ypmx7AKf6/k16S9K
+BCFDN3cyWmjItQNzEWbO2nuM9d3PX2O4FcZVfsA/GU0qSuKFUrrN0KcxKGglLdu4
+3Nt3JmOh+VebVWPSTeMzn2R1LDs2CsDpGG+KnHso80HBBq6RuHTugTiUZ2EwjiXN
+lRS7olKFQOPwT0tm1EVkH8IxQgV4KJbCb6hAScvWfsDdsP+bu4R+QI9hfU6HCWG3
+a8w1AY+5GT7zp1pzKifmnXgMXF3VnAPTGRhpIvPQfum2+tppLZueXlalobK0MDzi
+n36TNhRELao1W7Tvc18fxyZn37BBgKs89JO85/cjD72yhVowW7Hy9lL7RnB+etaN
+ehXoYFsJReNmD5KNgRtmXbsCUJ+D8v7BVYNGl1UgebmQnMdMWyiU/3l1Uuy8HS3L
+1QJYp42f5QqONttCqVzgzrECAwEAAQ==
+-----END PUBLIC KEY-----'''
 
     def load_rh(self, path):
         """Loads the raw file handler"""

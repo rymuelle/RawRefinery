@@ -75,7 +75,7 @@ pip install torch~=2.8
 ##### 3. Install via PyPI
 
 ```bash
-python -m pip install rawrefinery==1.3.0
+python -m pip install rawrefinery
 ```
 
 ##### 4. Run the application!

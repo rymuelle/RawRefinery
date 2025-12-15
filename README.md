@@ -1,8 +1,8 @@
 # RawRefinery
 
-[![PyPI version](https://img.shields.io/pypi/v/RawHandler.svg)](https://pypi.org/project/rawrefinery/)
+[![PyPI version](https://img.shields.io/pypi/v/rawrefinery.svg)](https://pypi.org/project/rawrefinery/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python version](https://img.shields.io/pypi/pyversions/RawHandler.svg)](https://pypi.org/project/rawrefinery/)
+[![Python version](https://img.shields.io/pypi/pyversions/rawrefinery.svg)](https://pypi.org/project/rawrefinery/)
 
 **RawRefinery** is an open-source application for **raw image quality refinement and denoising**.
 

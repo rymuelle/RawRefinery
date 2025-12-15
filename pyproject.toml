@@ -1,5 +1,5 @@
 [project]
-name = "RawRefinery" 
+name = "rawrefinery" 
 version = "1.3.0"
 description = "A demosaicing, denoising, and refining application for raw images."
 authors = [
@@ -10,9 +10,12 @@ requires-python = ">=3.11"
 license = { file = "LICENSE" }
 keywords = ["python", "Machine Learning", "Camera Raw"]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
 dependencies = [
     "pidng ~=4.0.9",
@@ -38,6 +41,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["RawRefinery*"]
 
 [project.scripts]
 rawrefinery = "RawRefinery.main:main"

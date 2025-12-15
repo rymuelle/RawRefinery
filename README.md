@@ -1,5 +1,9 @@
 # RawRefinery
 
+[![PyPI version](https://img.shields.io/pypi/v/RawHandler.svg)](https://pypi.org/project/rawrefinery/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python version](https://img.shields.io/pypi/pyversions/RawHandler.svg)](https://pypi.org/project/rawrefinery/)
+
 **RawRefinery** is an open-source application for **raw image quality refinement and denoising**.
 
 Currently in **alpha release**, RawRefinery provides a high-quality raw image denoising tool that works directly on most Bayer image formats, including those from **Canon, Nikon, and Sony** cameras.
@@ -32,6 +36,43 @@ It uses a deep learning–based denoising model designed to preserve fine image 
 ---
 
 ## Installation 
+
+### Install via PyPI (All OS):
+
+RawRefinery is now on PyPI! 
+
+https://pypi.org/project/rawrefinery/1.3.0/
+
+You can install with pip as follows with python 3.11+:
+
+#### Setting up the enviroment
+Example instructions for setting up the enviorment in an apt based linux OS:
+
+```bash
+# Set up python 3.11+
+sudo apt update
+sudo apt install python3 python3-pip python3-venv build-essential python3-dev
+
+# Clone the repository from GitHub
+git clone https://github.com/rymuelle/RawRefinery.git
+cd RawRefinery
+
+# Create the virtual environment named '.venv'
+python3 -m venv .venv
+```
+
+#### Install via PyPI
+
+```bash
+python -m pip install rawrefinery==1.3.0
+```
+
+And run in bash:
+
+```bash
+rawrefinery
+```
+
 
 ### Build from source from git (linux):
 

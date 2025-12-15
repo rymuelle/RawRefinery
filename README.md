@@ -66,6 +66,11 @@ Before installing RawRefinery, install a compatible version of **PyTorch**.
 You can find the correct PyTorch install command for your system here:
 https://pytorch.org/get-started/locally/
 
+e.g. For a 10XX GPU with CUDA 12.6, you may want:
+```bash
+pip install torch==2.6.0  --index-url https://download.pytorch.org/whl/test/cu126
+```
+
 For CPU usage, torch 2.8 is tested:
 
 ```bash

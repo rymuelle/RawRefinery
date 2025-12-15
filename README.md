@@ -103,8 +103,8 @@ Pending
 
 ### Download installer
 
-Download the macOS build here:
-[**RawRefinery v1.3.0-alpha**](https://github.com/rymuelle/RawRefinery/releases/download/v1.3.0-alpha)
+[Download the macOS build here.](https://github.com/rymuelle/RawRefinery/releases/download/v1.3.0-alpha/RawRefinery_v1.3.0.dmg)
+
 
 ---
 

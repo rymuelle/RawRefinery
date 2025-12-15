@@ -46,26 +46,40 @@ https://pypi.org/project/rawrefinery/1.3.0/
 You can install with pip as follows with python 3.11+:
 
 #### Setting up the enviroment
-Example instructions for setting up the enviorment in an apt based linux OS:
+Example instructions for setting up the enviroment in an apt based linux OS.
+
+##### 1. Set up Python
 
 ```bash
-# Set up python 3.11+
 sudo apt update
 sudo apt install python3 python3-pip python3-venv build-essential python3-dev
 
-# Clone the repository from GitHub
-git clone https://github.com/rymuelle/RawRefinery.git
-cd RawRefinery
-
-# Create the virtual environment named '.venv'
 python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-#### Install via PyPI
+##### 2. Set up Torch
+
+CUDA support depends on your GPU model.  
+Before installing RawRefinery, install a compatible version of **PyTorch**.
+
+You can find the correct PyTorch install command for your system here:
+https://pytorch.org/get-started/locally/
+
+For CPU usage, torch 2.8 is tested:
+
+```bash
+pip install torch~=2.8
+```
+
+##### 3. Install via PyPI
 
 ```bash
 python -m pip install rawrefinery==1.3.0
 ```
+
+##### 4. Run the application!
+
 
 And run in bash:
 

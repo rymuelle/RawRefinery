@@ -348,10 +348,10 @@ class ModelController(QObject):
             return True
         except Exception as e:
             print(e)
-            # if dest_path.exists():
-            #     dest_path.unlink()
-            # if sig_path.exists():
-            #     sig_path.unlink()
+            if dest_path.exists():
+                dest_path.unlink()
+            if sig_path.exists():
+                sig_path.unlink()
             print(f"Model {dest_path} not verified! Deleting.")
             return False
 

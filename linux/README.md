@@ -12,6 +12,8 @@ This guide describes how to clone the RawRefinery repository and install it loca
 
 Suggested bash script:
 
+##### 1. Cloning the code
+
 ```bash
 # Set up python 3.11+
 sudo apt update
@@ -26,9 +28,30 @@ python3 -m venv .venv
 
 # Activate the virtual environment
 source .venv/bin/activate
+```
+
+##### 2. Setting up Torch
+
+CUDA support depends on your GPU model.  
+Before installing RawRefinery, install a compatible version of **PyTorch**.
+
+You can find the correct PyTorch install command for your system here:
+https://pytorch.org/get-started/locally/
+
+For CPU usage, torch 2.8 is tested:
+
+```bash
+pip install torch~=2.8
+```
+
+##### 3. Installing
+
+```bash
 # Install the project. Use 'pip install -e .' for editable mode
 pip install .
 ```
+
+##### 4. Running
 
 Now, ensuring your virtual environment is activated, you may run the program:
 

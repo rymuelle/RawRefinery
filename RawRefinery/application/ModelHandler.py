@@ -13,6 +13,7 @@ from blended_tiling import TilingModule
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 from RawRefinery.application.postprocessing import match_colors_linear
+from RawRefinery.application.utils import can_use_cuda
 
 MODEL_REGISTRY = {
     "Tree Net Denoise": {
@@ -183,7 +184,7 @@ class ModelController(QObject):
 
         # Manage devices
         devices = {
-                   "cuda": torch.cuda.is_available(),
+                   "cuda": can_use_cuda(),
                    "mps": torch.backends.mps.is_available(),
                    "cpu": lambda : True
         }
@@ -406,3 +407,5 @@ class ModelController(QObject):
         to_dng(uint_img, self.rh, self.filename, ccm1, save_cfa=self.save_cfa, convert_to_cfa=True)
         delta_time = perf_counter() - self.start_time 
         self.save_finished.emit(f"Done in {delta_time:.1f} seconds.")
+
+

@@ -21,7 +21,6 @@ dependencies = [
     "pidng ~=4.0.9",
     "pyside6 ~=6.9",
     "numpy >=2.3", 
-    "torch ~=2.8",
     "RawHandler ~=0.0.2",
     "colour_demosaicing ~=0.2.6",
     "blended_tiling >=0.0.1.dev7",
@@ -30,6 +29,10 @@ dependencies = [
     "tqdm ~=4.67",
     "cryptography ~=46.0",
 ]
+
+[project.optional-dependencies]
+torch-modern = ["torch>=2.2"]
+torch-legacy = ["torch==2.0.1+cu118"]
 
 [project.urls]
 "Homepage" = "https://github.com/rymuelle/RawRefinery"

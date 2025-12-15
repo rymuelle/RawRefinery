@@ -170,7 +170,13 @@ You can also share before/after results or performance feedback to help guide mo
 
 ## Acknowledgments
 
-With thanks to the creators of the RawNIND dataset.
+With thanks to:
 
 
-Brummer, Benoit; De Vleeschouwer, Christophe, 2025, "Raw Natural Image Noise Dataset", https://doi.org/10.14428/DVN/DEQCIM, Open Data @ UCLouvain, V1 
+> Brummer, Benoit; De Vleeschouwer, Christophe. (2025).
+> *Raw Natural Image Noise Dataset.*
+> [https://doi.org/10.14428/DVN/DEQCIM](https://doi.org/10.14428/DVN/DEQCIM), Open Data @ UCLouvain, V1.
+
+> Chen, Liangyu; Chu, Xiaojie; Zhang, Xiangyu; Chen, Jianhao. (2022).
+> *NAFNet: Simple Baselines for Image Restoration.*
+> [https://doi.org/10.48550/arXiv.2208.04677](https://doi.org/10.48550/arXiv.2208.04677), arXiv, V1.

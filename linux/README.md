@@ -17,7 +17,7 @@ Suggested bash script:
 ```bash
 # Set up python 3.11+
 sudo apt update
-sudo apt install python3 python3-pip python3-venv build-essential python3-dev
+sudo apt install python3 python3-pip python3-venv build-essential python3-dev libxcb-cursor0
 
 # Clone the repository from GitHub
 git clone https://github.com/rymuelle/RawRefinery.git

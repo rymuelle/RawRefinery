@@ -52,7 +52,7 @@ Example instructions for setting up the enviroment in an apt based linux OS.
 
 ```bash
 sudo apt update
-sudo apt install python3 python3-pip python3-venv build-essential python3-dev
+sudo apt install python3 python3-pip python3-venv build-essential python3-dev libxcb-cursor0
 
 python3 -m venv .venv
 source .venv/bin/activate

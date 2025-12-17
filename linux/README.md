@@ -100,21 +100,3 @@ The deb can be installed as usual:
 ```bash
 sudo dpkg -i rawrefinery_1.3.0_amd64.deb
 ```
-
-
-
-## Linux specific notes. 
-
-In some cases (e.g. linux mint), you may need to install libxcb dependencies for Qt.
-
-```bash
-sudo apt install \
-    libxcb-cursor0 \
-    libxcb-xinerama0 \
-    libxcb-xkb1 \
-    libxkbcommon-x11-0 \
-    libxcb-icccm4 \
-    libxcb-image0 \
-    libxcb-keysyms1 \
-    libxcb-render-util0
-```

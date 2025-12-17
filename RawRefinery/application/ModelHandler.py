@@ -13,7 +13,7 @@ from blended_tiling import TilingModule
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 from RawRefinery.application.dng_utils import convert_color_matrix, to_dng
 from RawRefinery.application.postprocessing import match_colors_linear
-from RawRefinery.application.utils import can_use_cuda
+from RawRefinery.application.utils import can_use_gpu
 
 MODEL_REGISTRY = {
     "Tree Net Denoise": {
@@ -184,7 +184,7 @@ class ModelController(QObject):
 
         # Manage devices
         devices = {
-                   "cuda": can_use_cuda(),
+                   "cuda": can_use_gpu(),
                    "mps": torch.backends.mps.is_available(),
                    "cpu": lambda : True
         }

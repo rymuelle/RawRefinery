@@ -1,15 +1,10 @@
 import torch
 
-def can_use_cuda():
+def can_use_gpu():
     if not torch.cuda.is_available():
-        print("CUDA not available.")
         return False
-    arch = torch.cuda.get_arch_list()
-    major, minor = torch.cuda.get_device_capability()
-
-    if  f"sm_{major}{minor}" in arch:
-        print(f"Found CUDA arch {"sm_{major}{minor}"}. Using Cuda")
+    try:
+        x = torch.zeros(1, device="cuda")
         return True
-    else:
-        print(f"Found CUDA arch {"sm_{major}{minor}"}. Must be in {arch}")
+    except Exception:
         return False

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QListWidget, QLabel, QSlider, QSpinBox, 
     QHBoxLayout, QFormLayout, QComboBox, QProgressBar, QMessageBox
 )
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QPixmap, QIcon, QTransform
 from PySide6.QtCore import Qt, Slot
 
 # Import utils
@@ -192,7 +192,14 @@ class RawRefineryApp(QMainWindow):
             # Show thumbnail
             thumb_rgb = self.controller.generate_thumbnail()
             qimg = numpy_to_qimage_rgb(thumb_rgb, exposure=self.exposure_slider.get_natural_value())
-            self.thumb_label.set_image(qimg)
+
+            # Show image accordingly to EXIF orientation
+            transform = QTransform().rotate(self.controller.orientation)
+            if self.controller.mirrored:
+                transform = QTransform().scale(-1,1).rotate(self.controller.orientation)
+            rot = qimg.transformed(transform)
+
+            self.thumb_label.set_image(rot)
             
             self.dims = None 
             self.preview_label.setText("Click thumbnail to preview region")
@@ -204,6 +211,21 @@ class RawRefineryApp(QMainWindow):
         # Calculate dims based on click ratio and raw size
         rh = self.controller.rh
         H_full, W_full = rh.raw.shape
+        
+
+        # Retrieve the original coordinate from non-rotated media
+        match self.controller.orientation:
+            case 0:
+                pass
+            case 90:
+                x_ratio, y_ratio = y_ratio, x_ratio
+            case 180:
+                x_ratio, y_ratio = 1.0 - x_ratio, 1.0 - y_ratio
+            case 270:
+                x_ratio, y_ratio = 1.0- y_ratio, x_ratio
+
+        if self.controller.mirrored:
+            x_ratio = 1.0 - x_ratio
         
         # Center of click in raw coords
         c_x = int(x_ratio * W_full)
@@ -288,7 +310,14 @@ class RawRefineryApp(QMainWindow):
         
         # Convert output to QImage
         qimg = numpy_to_qimage_rgb(denoised, exposure=self.exposure_slider.get_natural_value())
-        pix = QPixmap.fromImage(qimg)
+
+        # Show image accordingly to EXIF orientation
+        transform = QTransform().rotate(self.controller.orientation)
+        if self.controller.mirrored:
+            transform = QTransform().scale(-1,1).rotate(self.controller.orientation)
+        rot = qimg.transformed(transform)
+
+        pix = QPixmap.fromImage(rot)
         
         # Scale for display
         scaled = pix.scaled(self.preview_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)

@@ -180,6 +180,8 @@ class ModelController(QObject):
         self.model = None
         self.rh = None
         self.iso = 100
+        self.orientation = 0.
+        self.mirrored = False
         self.colorspace = 'lin_rec2020'
 
         # Manage devices
@@ -208,6 +210,36 @@ class ModelController(QObject):
             self.iso = int(self.rh.full_metadata['EXIF ISOSpeedRatings'].values[0])
         else:
             self.iso = 100
+        if 'Image Orientation' in self.rh.full_metadata:
+            orientation_value = int(self.rh.full_metadata['Image Orientation'].values[0])
+            match orientation_value :
+                case 1:
+                    self.mirrored=False
+                    self.orientation=0.
+                case 2:
+                    self.mirrored=True
+                    self.orientation=0.
+                case 3:
+                    self.mirrored=False
+                    self.orientation = 180.
+                case 4:
+                    self.mirrored=True
+                    self.orientation = 180.
+                case 5: 
+                    self.mirrored=True
+                    self.orientation= 90.
+                case 6: 
+                    self.mirrored=False
+                    self.orientation= 90.
+                case 7:
+                    self.mirrored=True
+                    self.orientation = 270.
+                case 8:
+                    self.mirrored=False
+                    self.orientation = 270.
+        else:
+            self.orientation = 0.
+            self.mirrored = False
         return self.iso
 
     def load_model(self, model_key):

@@ -175,7 +175,7 @@ class RawRefineryApp(QMainWindow):
         if folder:
             self.current_folder = folder
             self.file_list.clear()
-            exts = ('.cr2', '.cr3', '.nef', '.arw', '.dng')
+            exts = ('.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2')
             files = sorted([f for f in os.listdir(folder) if f.lower().endswith(exts)])
             self.file_list.addItems(files)
 

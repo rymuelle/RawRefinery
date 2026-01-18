@@ -138,6 +138,7 @@ def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True, convert_to_cfa=True, use
 
 
     try:
+      t.set(Tag.DateTimeOriginal, rh.full_metadata['EXIF DateTimeOriginal'].values)
       t.set(Tag.Make, rh.full_metadata['Image Make'].values)
       t.set(Tag.Model, rh.full_metadata['Image Model'].values)
       t.set(Tag.Orientation, rh.full_metadata['Image Orientation'].values[0])

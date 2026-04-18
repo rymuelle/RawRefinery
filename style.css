@@ -1,0 +1,25 @@
+/* Basic reset to make it look clean */
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+h1 {
+    color: #2b5a91;
+}
+
+.test-box {
+    margin-top: 20px;
+    padding: 20px;
+    border: 2px solid #2b5a91;
+    border-radius: 8px;
+    background-color: #e1f5fe;
+    font-weight: bold;
+}

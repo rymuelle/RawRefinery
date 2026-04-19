@@ -127,8 +127,8 @@ def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True, convert_to_cfa=True, use
     t.set(Tag.ImageLength, height)
     t.set(Tag.PlanarConfiguration, 1) # 1 for chunky (interleaved RGB)
 
-    t.set(Tag.TileWidth, width)
-    t.set(Tag.TileLength, height)
+    # t.set(Tag.TileWidth, width)
+    # t.set(Tag.TileLength, height)
 
     t.set(Tag.ColorMatrix1, ccm1)
     t.set(Tag.CalibrationIlluminant1, CalibrationIlluminant.D65)
@@ -138,21 +138,28 @@ def to_dng(uint_img, rh, filepath, ccm1, save_cfa=True, convert_to_cfa=True, use
 
 
     try:
-      t.set(Tag.Make, rh.full_metadata['Image Make'].values)
-      t.set(Tag.Model, rh.full_metadata['Image Model'].values)
-      t.set(Tag.Orientation, rh.full_metadata['Image Orientation'].values[0])
-      exposures = get_ratios('EXIF ExposureTime', rh)
-      fnumber = get_ratios('EXIF FNumber', rh)
-      ExposureBiasValue = get_ratios('EXIF ExposureBiasValue', rh) 
-      FocalLength = get_ratios('EXIF FocalLength', rh) 
-      t.set(Tag.FocalLength, FocalLength)
-      t.set(Tag.EXIFPhotoLensModel, rh.full_metadata['EXIF LensModel'].values)
-      t.set(Tag.ExposureBiasValue, ExposureBiasValue)
-      t.set(Tag.ExposureTime, exposures)
-      t.set(Tag.FNumber, fnumber)
-      t.set(Tag.PhotographicSensitivity, rh.full_metadata['EXIF ISOSpeedRatings'].values)
-    except:
-      print("Could not save EXIF")
+        if 'Image Make' in rh.full_metadata:
+            t.set(Tag.Make, rh.full_metadata['Image Make'].values)
+        if 'Image Model' in rh.full_metadata:
+            t.set(Tag.Model, rh.full_metadata['Image Model'].values)
+        if 'Image Orientation' in rh.full_metadata:
+            t.set(Tag.Orientation, rh.full_metadata['Image Orientation'].values[0])
+        if 'EXIF ExposureTime' in rh.full_metadata:
+            t.set(Tag.ExposureTime, get_ratios('EXIF ExposureTime', rh))
+        if 'EXIF FNumber' in rh.full_metadata:
+            t.set(Tag.FNumber, get_ratios('EXIF FNumber', rh))
+        if 'EXIF ExposureBiasValue' in rh.full_metadata:
+            t.set(Tag.ExposureBiasValue, get_ratios('EXIF ExposureBiasValue', rh))
+        if 'EXIF FocalLength' in rh.full_metadata:
+            t.set(Tag.FocalLength, get_ratios('EXIF FocalLength', rh))
+        if 'EXIF LensModel' in rh.full_metadata:
+            t.set(Tag.EXIFPhotoLensModel, rh.full_metadata['EXIF LensModel'].values)
+        if 'EXIF ISOSpeedRatings' in rh.full_metadata:
+            t.set(Tag.PhotographicSensitivity, rh.full_metadata['EXIF ISOSpeedRatings'].values)
+    except Exception as e:
+        print(f"An unexpected error occurred while setting EXIF data: {e}")
+        import traceback
+        traceback.print_exc()
     t.set(Tag.DNGVersion, DNGVersion.V1_4)
     t.set(Tag.DNGBackwardVersion, DNGVersion.V1_2)
     t.set(Tag.PreviewColorSpace, PreviewColorSpace.Adobe_RGB)

@@ -18,7 +18,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
-    "pidng ~=4.0.9",
+    "pidng @ git+https://github.com/Leif-US/PiDNG",
     "pyside6 ~=6.9",
     "numpy >=2.3", 
     "RawHandler ~=0.0.2",
@@ -35,8 +35,8 @@ torch-legacy = ["torch ~=2.2"]
 torch-tested = ["torch ~=2.8"]
 
 [project.urls]
-"Homepage" = "https://github.com/rymuelle/RawRefinery"
-"Bug Tracker" = "https://github.com/rymuelle/RawRefinery/issues"
+"Homepage" = "https://github.com/Leif-US/RawRefinery"
+"Bug Tracker" = "https://github.com/Leif-US/RawRefinery/issues"
 
 [build-system]
 requires = ["setuptools>=61.0"] 
